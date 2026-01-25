@@ -1,3 +1,9 @@
+/* 
+CODE FOR ESP32. 
+Acts as a peripheral module that sends noise level data via CAN bus when requested by gateway node via HEARTBEAT_REQUEST.
+Sends HEARTBEAT_RESPONSE.
+*/
+
 #include <Arduino.h>
 #include <driver/twai.h>
 
@@ -159,10 +165,25 @@ void loop() {
       hbFrame.noise_db = mockNoiseReading();
       memset(hbFrame.reserved, 0, sizeof(hbFrame.reserved));
 
-      sendHeartbeatResponse(hbFrame);
+      if (sendHeartbeatResponse(hbFrame)) {
+        Serial.printf("Sent noise level: %d dB in heartbeat response.\n", hbFrame.noise_db);
+      };
 
-    } 
+    }
+
+    else if (status==ESP_ERR_TIMEOUT) { 
+      Serial.println("No CAN msg recv'd within timeout.");
+    }
+    else {
+      Serial.println("Error recv. CAN msg.");
+      Serial.println(status);
+    }
+
+
   }
+
+  delay(50); // some delay between loops
+
 }
 
 
