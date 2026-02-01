@@ -2,6 +2,13 @@
 CODE FOR ESP32. 
 Acts as a peripheral module that sends noise level data via CAN bus when requested by gateway node via HEARTBEAT_REQUEST.
 Sends HEARTBEAT_RESPONSE.
+
+
+TO DO: 
+- work in ALERT SENDING
+- work in handling ALERT ACKs 
+- work in handling MANUAL_CLEAR (ie. set a 1-2 min timer to disregard next alerts)
+- work in incomingCANMEssage monitoring (FreeRTOS?)
 */
 
 #include <Arduino.h>
@@ -9,15 +16,106 @@ Sends HEARTBEAT_RESPONSE.
 
 #define CAN_TX_PIN 5
 #define CAN_RX_PIN 4
+#define SAMPLE_INTERVAL_MS 5000 // 5 seconds
+#define ALERT_THRESHOLD_DB 100 
+#define ALERT_RETRY_INTERVAL_MS 500 // how often to resend unacked alert messages
 
 #define DEBUG_MODE 1
 
+// alert states 
+enum AlertState : uint8_t { 
+  /* 
+  This is what a cycle should look like for an alert: 
+  1. Alert condition triggered. Immediately tries to send an alert message via CAN to gateway node.
+  2. Waits for gateway to ACK with a timeout of 500 ms. If ACKed within timeout, OK. Go back to sampling. Else, keep retrying.
+  3. If subsequent noise levels are lower (ie. don't trigger an ALERT), then won't send anything to gateway. 
+  WE ONLY SEND ALERTS IF SOMETHING HAPPENED. 
+  4. There would be another task running that should keep track if we receive an ALERT_CLEARED. 
+  Which means, we ignore subsueqnet alert readings for the next 2 minutes.
+  5. 
+  */
+}; 
+
+
+// circular buffer for moving average filter
+// must match uint16_t to match heartbeat frame .noise_db
+class DataBuffer {
+  public: 
+    // attributes
+    int size; // how many slots we have
+    uint16_t* buffer; // pointer to array
+    int index; // where currently are in the buffer
+ 
+    DataBuffer(int bufferSize) {
+      size = bufferSize;
+      index = 0;
+      buffer = new uint16_t[size];
+
+      for(int i = 0; i < size; i++) {
+        buffer[i] = 0; // init all values to 0 starting out
+      }
+
+    } // constructor
+
+    void addSample(uint16_t newValue) {
+      // circular buffer, so overwrite 
+      buffer[index] = newValue;
+      index = (index + 1) % size; 
+    }
+
+    uint16_t getAverage() {
+      uint32_t  sum = 0;
+      for(int i = 0; i < size; i++) {
+        sum += buffer[i];
+      }
+      return uint16_t(sum / size);
+    }
+
+    uint16_t getMin() { 
+      uint16_t minimum = buffer[0];
+      for(int i = 1; i < size; i++) {
+        if(buffer[i] < minimum) {
+          minimum = buffer[i];
+        }
+      }
+      return minimum;
+
+    }
+    
+    uint16_t getMax() { 
+      uint16_t maximum = buffer[0];
+      for(int i = 1; i < size; i++) {
+        if(buffer[i] > maximum) {
+          maximum = buffer[i];
+        }
+      }
+      return maximum;
+    }
+};
+
+// create buffer globally
+int bufferSize = int(5*60*1000/SAMPLE_INTERVAL_MS); 
+DataBuffer noiseBuffer(bufferSize); // number of samples
+unsigned long lastSample = 0;
+
+
+/* 
+==================================
+CAN-RELATED
+==================================
+*/
 
 // heartbeat frame
 struct __attribute__((packed)) HeartbeatFrame {
   uint16_t noise_db;
   uint16_t reserved[3]; // to make sure 8 bytes in data expected
 }; 
+
+// alert frame
+struct __attribute__((packed)) AlertFrame {
+  uint16_t noise_db;
+  uint16_t reserved[3];
+};
 
 // indicates priority for arbitration
 enum CANPriority : uint8_t {
@@ -56,9 +154,6 @@ enum NodeID : uint8_t {
 
 #define THIS_NODE NODE_NOISE
 
-uint32_t mockNoiseReading() { 
-  return 70; 
-}
 
 uint32_t buildCANID(CANPriority priority, CANMessageType type, NodeID nodeid) {
     // return 11-bit CAN identifier from the enum types
@@ -128,8 +223,49 @@ bool sendHeartbeatResponse(const HeartbeatFrame& hbFrame) {
 }
 
 bool sendAlertMsg() { 
+  // spikes in values are less concerning for noise than continuous exposure - EXCEPT for 'instant damage/hazard' cases
+  
   // TO DO: 
+
   return false;
+}
+
+/* 
+==================================
+MOCKS FOR SENSOR READING 
+==================================
+*/
+
+uint16_t mockNoiseReading() { 
+  return 70; 
+}
+
+uint16_t mockAlertNoiseReading() { 
+  return 120; // instant damage, always send alerts for values detected > 100 dB 
+} // for manual testing, make it so that every 1/5 values read is this 'alert' case to test that alerts can be sent
+
+static int internalCounter = 0;
+uint16_t mockReadNoiseSensor() { 
+  if (internalCounter == 5) {
+    return mockAlertNoiseReading();
+    internalCounter = 0; // reset to 0
+  }
+
+  else { 
+    return mockNoiseReading();
+    internalCounter++; // increase by 1
+  }
+}
+
+
+bool isAlertNeeded(uint16_t value) {
+  // for noise, send alert if > 100 dB 
+  if (value >= ALERT_THRESHOLD_DB) {
+    return true;
+  }
+  else {
+    return false;
+  }
 }
 
 void setup() {
@@ -143,6 +279,21 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
+
+  // continuously sample at fixed interval
+  if (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
+    // continuously sample noise 
+    uint16_t curr_reading = mockReadNoiseSensor(); // TO DO: replace with real sensor reading
+    bool alert = isAlertNeeded(curr_reading); 
+    
+    noiseBuffer.addSample(curr_reading);
+    lastSample = millis();
+
+    #if DEBUG_MODE
+    Serial.printf("Sampled: %d dB", curr_reading);
+    #endif
+  }
+
   twai_message_t rx_msg;
 
   // wait for incoming CAN msg 
@@ -162,7 +313,7 @@ void loop() {
     if (msgType == HEARTBEAT_REQUEST && rx_msg.rtr == 1) {
       // prepare and send heartbeat response 
       HeartbeatFrame hbFrame;
-      hbFrame.noise_db = mockNoiseReading();
+      hbFrame.noise_db = noiseBuffer.getAverage();
       memset(hbFrame.reserved, 0, sizeof(hbFrame.reserved));
 
       if (sendHeartbeatResponse(hbFrame)) {
@@ -171,15 +322,14 @@ void loop() {
 
     }
 
-    else if (status==ESP_ERR_TIMEOUT) { 
-      Serial.println("No CAN msg recv'd within timeout.");
-    }
-    else {
-      Serial.println("Error recv. CAN msg.");
-      Serial.println(status);
-    }
+  }
 
-
+  else if (status==ESP_ERR_TIMEOUT) { 
+    Serial.println("No CAN msg recv'd within timeout.");
+  }
+  else {
+    Serial.println("Error recv. CAN msg.");
+    Serial.println(status);
   }
 
   delay(50); // some delay between loops
