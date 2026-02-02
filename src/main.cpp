@@ -83,25 +83,30 @@ void handleSampling(uint16_t& curr_reading) {
     #if DEBUG_MODE
     Serial.printf("Sampled: %d dB\n", curr_reading);
     #endif
+
+    // CHECK FOR ALERT CONDITION IMMEDIATELY AFTER SAMPLING
+    // This ensures we don't miss alerts when curr_reading gets overwritten by next sample
+    bool alertCondition = isAlertNeeded(curr_reading);
+    if (alertCondition && alertState == ALERT_IDLE && millis() > suppressUntil) {
+      if (sendAlertMsg(curr_reading)) {
+        #if DEBUG_MODE
+        Serial.println("[ALERT] Sent initial alert immediately after sampling, waiting for ACK...");
+        #endif
+        alertState = ALERT_PENDING;
+        lastAlertTx = millis();
+      }
+    }
   }
 }
 
 void handleAlertStates() {
   bool alertCondition = isAlertNeeded(curr_reading);
   
-  // Initial alert send
-  if (alertCondition && alertState == ALERT_IDLE && millis() > suppressUntil) {
-    if (sendAlertMsg(curr_reading)) {
-      #if DEBUG_MODE
-      Serial.println("[ALERT] Sent initial alert, waiting for ACK...");
-      #endif
-      alertState = ALERT_PENDING;
-      lastAlertTx = millis();
-    }
-  }
-
+  // NOTE: Initial alert sending moved to handleSampling() to prevent missing alerts
+  // when curr_reading gets overwritten by next sample
+  
   // only resend alert if no ACK after timeout
-  else if (alertCondition && alertState == ALERT_PENDING && (millis() - lastAlertTx >= ALERT_RETRY_INTERVAL_MS)) {
+  if (alertCondition && alertState == ALERT_PENDING && (millis() - lastAlertTx >= ALERT_RETRY_INTERVAL_MS)) {
     if (sendAlertMsg(curr_reading)) {
       #if DEBUG_MODE
       Serial.println("[ALERT] Resent alert, still waiting for ACK...");
