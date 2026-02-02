@@ -8,7 +8,7 @@
 #define CAN_RX_PIN 4
 #define SAMPLE_INTERVAL_MS 5000 // 5 seconds
 #define ALERT_THRESHOLD_DB 100 // trigger alert threshold
-#define ALERT_RETRY_INTERVAL_MS 500 // how often to resend unacked alert messages
+#define ALERT_RETRY_INTERVAL_MS 1000 // how often to resend unacked alert messages
 #define ALERT_SUPPRESS_DURATION 60000 // suppress further alerts for 1 minute if receive ALERT_CLEARED via CAN (to avoid clogging up the bus)
 
 
