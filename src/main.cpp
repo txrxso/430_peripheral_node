@@ -265,8 +265,9 @@ static int internalCounter = 0;
 uint16_t mockReadNoiseSensor() { 
   internalCounter++; // increase by 1
   if (internalCounter == 5) {
-    return mockAlertNoiseReading();
     internalCounter = 0; // reset to 0
+    return mockAlertNoiseReading();
+    
   }
 
   else { 
@@ -390,7 +391,7 @@ void loop() {
   }
 
   else if (status==ESP_ERR_TIMEOUT) { 
-    Serial.println("No CAN msg recv'd within timeout.");
+    //Serial.println("No CAN msg recv'd within timeout.");
   }
   else {
     Serial.println("Error recv. CAN msg.");
