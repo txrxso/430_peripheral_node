@@ -17,25 +17,23 @@ TO DO:
 #define CAN_TX_PIN 5
 #define CAN_RX_PIN 4
 #define SAMPLE_INTERVAL_MS 5000 // 5 seconds
-#define ALERT_THRESHOLD_DB 100 
+#define ALERT_THRESHOLD_DB 100 // trigger alert threshold
 #define ALERT_RETRY_INTERVAL_MS 500 // how often to resend unacked alert messages
+#define ALERT_SUPPRESS_DURATION 60000 // suppress further alerts for 1 minute if receive ALERT_CLEARED via CAN (to avoid clogging up the bus)
 
 #define DEBUG_MODE 1
 
 // alert states 
 enum AlertState : uint8_t { 
-  /* 
-  This is what a cycle should look like for an alert: 
-  1. Alert condition triggered. Immediately tries to send an alert message via CAN to gateway node.
-  2. Waits for gateway to ACK with a timeout of 500 ms. If ACKed within timeout, OK. Go back to sampling. Else, keep retrying.
-  3. If subsequent noise levels are lower (ie. don't trigger an ALERT), then won't send anything to gateway. 
-  WE ONLY SEND ALERTS IF SOMETHING HAPPENED. 
-  4. There would be another task running that should keep track if we receive an ALERT_CLEARED. 
-  Which means, we ignore subsueqnet alert readings for the next 2 minutes.
-  5. 
-  */
+  ALERT_IDLE,  
+  ALERT_PENDING, // notification sent, waiting for gateway ACK
+  ALERT_ACKED, // notification sent, gateway ACKed 
+  ALERT_CLEAR, // only trigger this state if receive CANMessageType ALERT_CLEARED 
 }; 
 
+AlertState alertState = ALERT_IDLE;
+unsigned long suppressUntil = 0;
+unsigned long lastAlertTx = 0;
 
 // circular buffer for moving average filter
 // must match uint16_t to match heartbeat frame .noise_db
@@ -222,12 +220,31 @@ bool sendHeartbeatResponse(const HeartbeatFrame& hbFrame) {
 
 }
 
-bool sendAlertMsg() { 
+bool sendAlertMsg(uint16_t noise_db) { 
   // spikes in values are less concerning for noise than continuous exposure - EXCEPT for 'instant damage/hazard' cases
-  
-  // TO DO: 
+  twai_message_t outgoing_msg;
+  AlertFrame frame;
 
-  return false;
+  frame.noise_db = noise_db;
+  memset(frame.reserved, 0, sizeof(frame.reserved));
+
+  outgoing_msg.identifier = buildCANID(SAFETY_ALERT, ALERT_NOTIFICATION, THIS_NODE);
+  outgoing_msg.extd = 0;
+  outgoing_msg.rtr = 0;
+  outgoing_msg.data_length_code = sizeof(AlertFrame);
+  memcpy(outgoing_msg.data, &frame, sizeof(AlertFrame));
+
+  esp_err_t status = twai_transmit(&outgoing_msg, 0); // non-blocking
+
+  #if DEBUG_MODE
+  if (status == ESP_OK) {
+    Serial.printf("ALERT_NOTIFICATION sent (%d dB)\n", noise_db);
+  } else {
+    Serial.printf("ALERT_NOTIFICATION TX failed (%d)\n", status);
+  }
+  #endif
+
+  return (status == ESP_OK);
 }
 
 /* 
@@ -279,13 +296,14 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
+  uint16_t curr_reading = 0; 
+  twai_message_t incoming_msg;
 
+  // 1. SAMPLE
   // continuously sample at fixed interval
   if (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
     // continuously sample noise 
-    uint16_t curr_reading = mockReadNoiseSensor(); // TO DO: replace with real sensor reading
-    bool alert = isAlertNeeded(curr_reading); 
-    
+    curr_reading = mockReadNoiseSensor(); // TO DO: replace with real sensor reading
     noiseBuffer.addSample(curr_reading);
     lastSample = millis();
 
@@ -294,14 +312,41 @@ void loop() {
     #endif
   }
 
-  twai_message_t rx_msg;
 
-  // wait for incoming CAN msg 
-  esp_err_t status = twai_receive(&rx_msg, pdMS_TO_TICKS(100));
+  // 2. ALERT STATE MACHINE
+  bool alertCondition = isAlertNeeded(curr_reading);
+  if (alertCondition && alertState == ALERT_IDLE && millis() > suppressUntil) { // only send if idle and not suppressed by ALERT_CLEAR
+    bool success = sendAlertMsg(curr_reading);
+    if (success) {
+      #if DEBUG_MODE
+      Serial.println("Sent Alert Msg via CAN.");
+      #endif
+      alertState = ALERT_PENDING; // notif sent, waiting for ACK
+      lastAlertTx = millis();
+    } else {
+      #if DEBUG_MODE
+      Serial.println("Failed to send Alert Msg via CAN.");
+      #endif
+    }
+  }
 
+  // retry ALERT_NOTIFICATION if not ACKED yet 
+  if (alertState == ALERT_PENDING && millis() - lastAlertTx >= ALERT_RETRY_INTERVAL_MS) { 
+    if (sendAlertMsg(curr_reading)) {
+      #if DEBUG_MODE
+      Serial.println("Retried successful ALERT_NOTIFICATION via CAN.");
+      #endif
+      lastAlertTx = millis();
+    }
+  }
+
+
+  // 3. RECEIVE INCOMING CAN MESSAGES
+  esp_err_t status = twai_receive(&incoming_msg, pdMS_TO_TICKS(100));
+  
   if (status == ESP_OK) {
     // parse msg 
-    uint32_t id = rx_msg.identifier;
+    uint32_t id = incoming_msg.identifier;
     CANPriority priority = static_cast<CANPriority>((id >> 8) & 0x07);
     CANMessageType msgType = static_cast<CANMessageType>((id >> 3) & 0x1F);
     NodeID nodeId = static_cast<NodeID>(id & 0x07);
@@ -310,7 +355,7 @@ void loop() {
     Serial.printf("Received CAN msg. ID: 0x%03X, Priority: %d, Type: %d, From Node: 0x%02X\n", id, priority, msgType, nodeId);
     #endif
 
-    if (msgType == HEARTBEAT_REQUEST && rx_msg.rtr == 1) {
+    if (msgType == HEARTBEAT_REQUEST && incoming_msg.rtr == 1) {
       // prepare and send heartbeat response 
       HeartbeatFrame hbFrame;
       hbFrame.noise_db = noiseBuffer.getAverage();
@@ -319,6 +364,26 @@ void loop() {
       if (sendHeartbeatResponse(hbFrame)) {
         Serial.printf("Sent noise level: %d dB in heartbeat response.\n", hbFrame.noise_db);
       };
+
+    }
+
+    // ALERT ACKED BY GATEWAY
+    else if (msgType == ALERT_ACK && nodeId == GATEWAY_NODE) {
+      if (alertState == ALERT_PENDING) {
+        alertState = ALERT_ACKED;
+        #if DEBUG_MODE
+          Serial.println("ALERT_ACK received from gateway, alertState: ALERT_ACKED");
+        #endif
+      }
+    }
+
+    // GATEWAY TELLING PERIPHERAL TO ALERT WAS CLEARED (PERIPHERAL THEN SUPRRESSES)
+    else if (msgType == ALERT_CLEARED && nodeId == GATEWAY_NODE) {
+      suppressUntil = millis() + ALERT_SUPPRESS_DURATION;
+      alertState = ALERT_CLEAR;
+      #if DEBUG_MODE
+      Serial.println("ALERT_CLEARED received from gateway, suppressing new alerts");
+      #endif
 
     }
 
@@ -332,7 +397,13 @@ void loop() {
     Serial.println(status);
   }
 
-  delay(50); // some delay between loops
+  // 4. RESET ALERT_CLEAR -> ALERT_IDLE STATE AFTER SUPPRESSION PERIOD 
+  if (alertState == ALERT_CLEAR && millis() > suppressUntil) {
+    alertState = ALERT_IDLE;
+    Serial.println("Resetting state. Suppression time period over.");
+  }
+
+  delay(100); // some delay between loops
 
 }
 
