@@ -263,6 +263,7 @@ uint16_t mockAlertNoiseReading() {
 
 static int internalCounter = 0;
 uint16_t mockReadNoiseSensor() { 
+  internalCounter++; // increase by 1
   if (internalCounter == 5) {
     return mockAlertNoiseReading();
     internalCounter = 0; // reset to 0
@@ -270,7 +271,6 @@ uint16_t mockReadNoiseSensor() {
 
   else { 
     return mockNoiseReading();
-    internalCounter++; // increase by 1
   }
 }
 
