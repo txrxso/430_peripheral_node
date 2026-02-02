@@ -43,10 +43,12 @@ class DataBuffer {
     int size; // how many slots we have
     uint16_t* buffer; // pointer to array
     int index; // where currently are in the buffer
+    int count; // how many samples actually added so far 
  
     DataBuffer(int bufferSize) {
       size = bufferSize;
       index = 0;
+      count = 0;
       buffer = new uint16_t[size];
 
       for(int i = 0; i < size; i++) {
@@ -59,6 +61,7 @@ class DataBuffer {
       // circular buffer, so overwrite 
       buffer[index] = newValue;
       index = (index + 1) % size; 
+      if (count < size) count++ ; // stop incrementing once buffer all filled up
     }
 
     uint16_t getAverage() {
@@ -66,10 +69,11 @@ class DataBuffer {
       for(int i = 0; i < size; i++) {
         sum += buffer[i];
       }
-      return uint16_t(sum / size);
+      return uint16_t(sum / count); // divide by actual sample count
     }
 
     uint16_t getMin() { 
+      if (count == 0) return 0;
       uint16_t minimum = buffer[0];
       for(int i = 1; i < size; i++) {
         if(buffer[i] < minimum) {
