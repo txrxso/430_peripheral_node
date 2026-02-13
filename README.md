@@ -1,9 +1,9 @@
 # 430_peripheral_node
 firmware for peripheral nodes
 
-Branch `main` is for the general code logic template. 
-Branch `noise` is for the noise node. 
-Branch `air_quality` is for the air quality node. 
+Branch `main` is for the general code logic template. <br>
+Branch `noise` is for the noise node. <br>
+Branch `air_quality` is for the air quality node. <br>
 
 Features: 
 - Samples sensor data
