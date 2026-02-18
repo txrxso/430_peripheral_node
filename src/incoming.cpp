@@ -3,7 +3,7 @@
 
 #define DEBUG_MODE_INCOMING 1
 
-void handleIncomingMsg(DataBuffer& dataBuffer, AlertState& alertState, unsigned long& suppressUntil) {
+void handleIncomingMsg(DataBuffer& dataBuffer, AlertState& alertState, unsigned long& suppressUntil, SoundSensor& noiseSensor) {
     twai_message_t incoming_msg;
     esp_err_t status = twai_receive(&incoming_msg, pdMS_TO_TICKS(100));
 
@@ -25,7 +25,16 @@ void handleIncomingMsg(DataBuffer& dataBuffer, AlertState& alertState, unsigned 
 
     // handle based on message type
     if (msgType == HEARTBEAT_REQUEST && incoming_msg.rtr == 1) {
-        handleHeartbeatRTRMsg(incoming_msg, dataBuffer.getAverage());
+        // guard to only reply to RTR with data if sensor prescence detected
+        noiseSensor.update(); // update sensor reading and connection status
+        if (noiseSensor.isConnected()) {
+            handleHeartbeatRTRMsg(incoming_msg, dataBuffer.getAverage());
+        } else {
+            #if DEBUG_MODE_INCOMING
+            Serial.println("Received HEARTBEAT_REQUEST RTR, but sensor not detected. Ignoring.");
+            #endif
+        }
+        
     }
 
     else if (msgType == ALERT_ACK && nodeId == GATEWAY_NODE) { 

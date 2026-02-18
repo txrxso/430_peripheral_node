@@ -2,13 +2,6 @@
 CODE FOR ESP32. 
 Acts as a peripheral module that sends noise level data via CAN bus when requested by gateway node via HEARTBEAT_REQUEST.
 Sends HEARTBEAT_RESPONSE.
-
-
-TO DO: 
-- work in ALERT SENDING
-- work in handling ALERT ACKs 
-- work in handling MANUAL_CLEAR (ie. set a 1-2 min timer to disregard next alerts)
-- work in incomingCANMEssage monitoring (FreeRTOS?)
 */
 
 #include <Arduino.h>
@@ -17,10 +10,13 @@ TO DO:
 #include "outgoing.h"
 #include "incoming.h"
 #include "data_buffer.h"
+#include "sensor.h"
 
 #define DEBUG_MODE 1
+#define SENSOR_MOCK 1 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 
-
+SoundSensor noiseSensor(A0); 
+// GPIO 36? Need to check. Or see if can use other pin with internal pull up/down already.
 AlertState alertState = ALERT_IDLE;
 unsigned long suppressUntil = 0;
 unsigned long lastAlertTx = 0;
@@ -38,7 +34,7 @@ unsigned long lastSample = 0;
 MOCKS FOR SENSOR READING 
 ==================================
 */
-
+#if SENSOR_MOCK
 uint16_t mockNoiseReading() { 
   return 70; 
 }
@@ -60,7 +56,7 @@ uint16_t mockReadNoiseSensor() {
     return mockNoiseReading();
   }
 }
-
+#endif 
 
 bool isAlertNeeded(uint16_t value) {
   // for noise, send alert if > 100 dB 
@@ -76,10 +72,17 @@ void handleSampling(uint16_t& curr_reading) {
   // sample at fixed interval
   if (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
     // continuously sample noise 
+    #if SENSOR_MOCK 
     curr_reading = mockReadNoiseSensor(); // TO DO: replace with real sensor reading
+    #else 
+    if (noiseSensor.update()) {
+      curr_reading = noiseSensor.getCurrentReading();
+    }
+    #endif
+
     noiseBuffer.addSample(curr_reading);
     lastSample = millis();
-
+    
     #if DEBUG_MODE
     Serial.printf("Sampled: %d dB\n", curr_reading);
     #endif
@@ -141,6 +144,10 @@ void setup() {
     delay(20);
   } 
 
+  #if SENSOR_MOCK == 0 
+  noiseSensor.begin();
+  #endif 
+
   // configure filter to ignore messages from itself
   twai_filter_config_t f_config = {
     .acceptance_code = ((uint32_t)GATEWAY_NODE << 21), // accept when NodeID == 0x01 
@@ -154,7 +161,7 @@ void setup() {
 void loop() {
   
   handleSampling(curr_reading);
-  handleIncomingMsg(noiseBuffer, alertState, suppressUntil);
+  handleIncomingMsg(noiseBuffer, alertState, suppressUntil, noiseSensor);
   handleAlertStates();
 
   delay(100);
