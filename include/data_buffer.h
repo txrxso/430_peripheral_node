@@ -33,6 +33,9 @@ class DataBuffer {
     }
 
     uint16_t getAverage() {
+      // guard if no samples
+      if (count == 0) return 0; // 0 dB is effectively silence, so makes sense as default value when no data yet
+      
       uint32_t  sum = 0;
       for(int i = 0; i < size; i++) {
         sum += buffer[i];
@@ -53,6 +56,7 @@ class DataBuffer {
     }
     
     uint16_t getMax() { 
+      if (count == 0) return 0;
       uint16_t maximum = buffer[0];
       for(int i = 1; i < size; i++) {
         if(buffer[i] > maximum) {
