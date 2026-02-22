@@ -13,7 +13,7 @@ Sends HEARTBEAT_RESPONSE.
 #include "sensor.h"
 
 #define DEBUG_MODE 1
-#define SENSOR_MOCK 1 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
+#define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 
 SoundSensor noiseSensor(A0); 
 // GPIO 36? Need to check. Or see if can use other pin with internal pull up/down already.
