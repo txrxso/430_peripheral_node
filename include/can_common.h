@@ -23,14 +23,18 @@ enum AlertState : uint8_t {
 // CAN message structures
 // heartbeat frame
 struct __attribute__((packed)) HeartbeatFrame {
-  uint16_t noise_db;
-  uint16_t reserved[3]; // to make sure 8 bytes in data expected
+  uint16_t aqi_pm_25_us;
+  uint16_t aqi_pm100_us;
+  uint16_t aqi_uba;
+  uint16_t reserved[1]; // to make sure 8 bytes in data expected
 }; 
 
 // alert frame
 struct __attribute__((packed)) AlertFrame {
-  uint16_t noise_db;
-  uint16_t reserved[3];
+  uint16_t aqi_pm_25_us;
+  uint16_t aqi_pm100_us;
+  uint16_t aqi_uba;
+  uint16_t reserved[1];
 };
 
 // indicates priority for arbitration
