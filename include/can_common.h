@@ -68,7 +68,7 @@ enum NodeID : uint8_t {
 };
 
 
-#define THIS_NODE NODE_NOISE
+#define THIS_NODE NODE_AIR_Q
 
 // shared global variables (defined in main.cpp)
 extern AlertState alertState;
