@@ -12,6 +12,8 @@
 
 #define SENSOR_DEBUG_MODE 1
 #define ENS160_AHT21_I2C_ADDR 0x53  // may also be 0x52 - need to check
+#define PM_RX_PIN 16  // ESP32 RX connected to PM sensor TX
+#define PM_TX_PIN 17  // ESP32 TX connected to PM sensor RX
 
 struct AQReading {
     uint16_t pm25, pm10, pm100;

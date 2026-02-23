@@ -18,7 +18,11 @@ bool AirQualitySensor::isENSConnected() const { return _ensConnected; }
 void AirQualitySensor::begin() {
     Wire.begin();
 
-    _pmConnected = _pmSensor.begin_I2C();
+    // Initialize UART for PM sensor
+    Serial1.begin(9600, SERIAL_8N1, PM_RX_PIN, PM_TX_PIN);
+    delay(3000); // Wait for PM sensor to boot up
+
+    _pmConnected = _pmSensor.begin_UART(&Serial1);
 
     _ensSensor->begin(&Wire, ENS160_AHT21_I2C_ADDR);
     _ensConnected = _ensSensor->init();
@@ -30,7 +34,7 @@ void AirQualitySensor::begin() {
         Serial.println(isENSConnected() ? "ENS sensor is connected." : "ENS sensor is not connected.");
         // try again
         #endif
-        _pmConnected = _pmSensor.begin_I2C();
+        _pmConnected = _pmSensor.begin_UART(&Serial1);
         _ensConnected = _ensSensor->init();
         delay(1000);
     }
