@@ -1,5 +1,5 @@
 /* 
-- Sensor reading code
+- Sensor reading code for PM and ENS sensor
 - Detecting sensor prescence (pull-down required)
 */
 
@@ -7,30 +7,40 @@
 #define SENSOR_H
 
 #include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_PM25AQI.h> 
+#include <ScioSense_ENS16x.h>
 
-#define VREF 3.3 
-#define ADC_MAX 4096 // ESP32 has 12 bit resolution
 
-
-class SoundSensor {
-    public: 
-        // init
-        SoundSensor(uint8_t pin); // valid pins : GPIO 12-15, 25-27, 32-39
-
-        void begin();
-        bool update(); 
-        uint16_t getCurrentReading() const; // return current reading
-        bool isConnected() const;
-
-    private: 
-        uint8_t _pin;
-        uint16_t _currentReading; // dB
-        bool _connected;
-
-        static const uint16_t DISCONNECTED_THRESHOLD = 500; // min_valid_adc 
-        static const uint16_t MAX_ADC_VALUE = 4095;
+struct AQReading {
+    uint16_t pm25, pm10, pm100;
+    uint16_t tvoc, eco2;
+    uint16_t  aqi;
 };
 
+
+// group both PM and ENS sensor into one class for easier handling
+class AirQualitySensor {
+    public: 
+        // declare an instance of it
+        AirQualitySensor(); 
+        void begin(); 
+        bool update(); 
+        AQReading getReading() const;
+
+    private: 
+        Adafruit_PM25AQI _pmSensor;
+        ENS160 _ensSensor;
+
+        // check connected
+        bool _pmConnected;
+        bool _ensConnected;
+        AQReading _reading;
+        
+        bool isPMConnected() const;
+        bool isENSConnected() const;
+
+};
 
 
 #endif
