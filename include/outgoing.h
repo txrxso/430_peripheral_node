@@ -4,9 +4,4 @@
 
 #include "can_common.h"
 
-
-// outgoing message functions
-bool sendHeartbeatResponse(const HeartbeatFrame& hbFrame);
-bool sendAlertMsg(uint16_t noise_db);
-
 #endif 

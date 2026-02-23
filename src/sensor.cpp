@@ -1,36 +1,74 @@
+#include <ScioSense_ENS16x.h>
 #include "sensor.h"
 
-// init
-SoundSensor::SoundSensor(uint8_t pin) 
-: _pin(pin), _currentReading(0), _connected(false) {}
+AirQualitySensor::AirQualitySensor() : 
+    _pmSensor(), _ensSensor(new ENS160()),
+    // set all connected states to false  
+    _pmConnected(false), _ensConnected(false), 
+    // set all reading values to 0 
+    _readings{0, 0, 0, 0, 0, 0, 0, 0} {}
 
-void SoundSensor::begin() {
-    pinMode(_pin, INPUT);
+AirQualitySensor::~AirQualitySensor() {
+    delete _ensSensor;
 }
 
-bool SoundSensor::update() {
-    uint16_t adcValue = analogRead(_pin);
-    _currentReading = adcValue; // for now, just return raw ADC value as 'dB' reading
+bool AirQualitySensor::isPMConnected()  const { return _pmConnected; }
+bool AirQualitySensor::isENSConnected() const { return _ensConnected; }
 
-    // check if sensor is connected based on threshold
-    if (adcValue < MAX_ADC_VALUE && adcValue >= DISCONNECTED_THRESHOLD) {
-        _connected = true;
+void AirQualitySensor::begin() {
+    Wire.begin();
 
-        // perform a reading
-        float voltage = (adcValue / float(ADC_MAX)) * VREF; // convert ADC to voltage
-        _currentReading = voltage * 50.0;
+    _pmConnected = _pmSensor.begin_I2C();
+
+    _ensSensor->begin(&Wire, ENS160_AHT21_I2C_ADDR);
+    _ensConnected = _ensSensor->init();
+
+    while (!_pmConnected || !_ensConnected) {
+        #if SENSOR_DEBUG_MODE
+        Serial.println("At least one sensor was unable to be initialized.");
+        Serial.println(isPMConnected() ? "PM sensor is connected." : "PM sensor is not connected.");
+        Serial.println(isENSConnected() ? "ENS sensor is connected." : "ENS sensor is not connected.");
+        // try again
+        #endif
+        _pmConnected = _pmSensor.begin_I2C();
+        _ensConnected = _ensSensor->init();
+        delay(1000);
     }
-    else {
-        _connected = false;
+    
+}
+
+bool AirQualitySensor::update() {
+    PM25_AQI_Data pmData;
+    bool pm_updated = false; 
+    bool ens_updated = false;
+
+    if (_pmSensor.read(&pmData) == true) {
+        _pmConnected = true; // sync again
+        _readings.pm25 = pmData.pm25_standard;
+        _readings.pm10 = pmData.pm10_standard;
+        _readings.pm100 = pmData.pm100_standard;
+        _readings.aqi_pm100_us = pmData.aqi_pm100_us;
+        _readings.aqi_pm25_us = pmData.aqi_pm25_us;
+        pm_updated = true;
+    } else {
+        _pmConnected = false; // sync again
     }
 
-    return _connected;
+    if (_ensSensor->update() == RESULT_OK) {
+        _ensConnected = true; // sync again
+        _readings.tvoc = _ensSensor->getTvoc();
+        _readings.eco2 = _ensSensor->getEco2();
+        _readings.aqi_uba = (uint16_t)_ensSensor->getAirQualityIndex_UBA(); // cast from enum to uint16_t
+        ens_updated = true;
+    } else {
+        _ensConnected = false; // sync again
+    }
+
+    return pm_updated || ens_updated;   
+
 }
 
-uint16_t SoundSensor::getCurrentReading() const {
-    return _currentReading;
+AQReading AirQualitySensor::getReading() const {
+    return _readings;
 }
 
-bool SoundSensor::isConnected() const {
-    return _connected;
-}   

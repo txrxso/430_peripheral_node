@@ -6,11 +6,5 @@
 #include "sensor.h"
 
 // outgoing message functions
-void handleIncomingMsg(DataBuffer& dataBuffer, 
-    AlertState& alertState, 
-    unsigned long& suppressUntil,
-    SoundSensor& noiseSensor);
-void handleHeartbeatRTRMsg(const twai_message_t& msg, uint16_t average);
-
 
 #endif 
