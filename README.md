@@ -1,4 +1,4 @@
-# Noise Node Peripheral Code 
+# Air Quality Node Peripheral Code 
 
 ## Configuration Parameters
 
