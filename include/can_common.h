@@ -74,11 +74,14 @@ enum NodeID : uint8_t {
 
 #define THIS_NODE NODE_AIR_Q
 
+// forward declaration
+struct AQReading;
+
 // shared global variables (defined in main.cpp)
 extern AlertState alertState;
 extern unsigned long suppressUntil;
 extern unsigned long lastAlertTx;
-extern uint16_t curr_reading;
+extern AQReading curr_reading;
 
 uint32_t buildCANID(CANPriority priority, CANMessageType type, NodeID nodeid);
 bool initCAN();

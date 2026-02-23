@@ -20,8 +20,7 @@ AirQualitySensor airQualitySensor;
 AlertState alertState = ALERT_IDLE;
 unsigned long suppressUntil = 0;
 unsigned long lastAlertTx = 0;
-uint16_t curr_reading = 0;
-
+AQReading curr_reading = {0, 0, 0, 0, 0, 0, 0, 0};
 
 // create buffer globally
 int bufferSize = int(5*60*1000/SAMPLE_INTERVAL_MS); 
@@ -30,6 +29,50 @@ unsigned long lastSample = 0;
 DataBuffer pm25AqiBuffer(bufferSize);
 DataBuffer pm100AqiBuffer(bufferSize);
 DataBuffer ubaAqiBuffer(bufferSize);
+
+// ====== SENSOR MOCKS ======
+#if SENSOR_MOCK
+AQReading mockAQReading() {
+    return {12, 8, 3, 150, 400, 2, 25, 10}; // normal air quality
+}
+#endif
+
+// ===== HELPERS ======
+void handleSampling() { 
+  if (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
+
+    #if SENSOR_MOCK
+    curr_reading = mockAQReading();
+    #else
+    if (airQualitySensor.update()) {
+        curr_reading = airQualitySensor.getReading();
+    }
+    #endif
+
+    // feed buffers 
+    pm25AqiBuffer.addSample(curr_reading.aqi_pm25_us);
+    pm100AqiBuffer.addSample(curr_reading.aqi_pm100_us);
+    ubaAqiBuffer.addSample(curr_reading.aqi_uba);
+
+    lastSample = millis();
+
+    #if DEBUG_MODE
+    Serial.printf("Sampled - PM2.5 AQI: %d, PM10 AQI: %d, UBA: %d\n",
+        curr_reading.aqi_pm25_us, curr_reading.aqi_pm100_us, curr_reading.aqi_uba);
+    #endif
+
+    // TODO: check alert condition
+
+  }
+
+}
+
+// TODO: do we want alerts for AQ? 
+void handleAlertStates() {
+
+}
+
+// ====== SETUP AND LOOP ====
 
 void setup() {
     Serial.begin(115200);
@@ -51,5 +94,7 @@ void setup() {
 }
 
 void loop() { 
-  
+  handleSampling();
+  handleIncomingMsg(pm25AqiBuffer, pm100AqiBuffer, ubaAqiBuffer, alertState, suppressUntil, airQualitySensor);
+  delay(100);
 }
