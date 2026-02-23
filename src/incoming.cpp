@@ -87,7 +87,14 @@ void handleHeartbeatRTRMsg(const twai_message_t& msg, int16_t avg_pm25, uint16_t
     hbFrame.aqi_uba = avg_uba;
     memset(hbFrame.reserved, 0, sizeof(hbFrame.reserved)); // zero out reserved bytes
 
-    // sendHeartbeatResponse(msg.identifier, hbFrame);
+    bool sent = sendHeartbeatResponse(hbFrame);
+    #if DEBUG_MODE_INCOMING
+    if (sent) {
+        Serial.printf("Sent AQI values - PM2.5: %d, PM10: %d, UBA: %d in heartbeat response.\n", hbFrame.aqi_pm_25_us, hbFrame.aqi_pm100_us, hbFrame.aqi_uba);
+    } else {
+        Serial.println("Failed to send HEARTBEAT_RESPONSE.");
+    }
+    #endif
 }
 
 

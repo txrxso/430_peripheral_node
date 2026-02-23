@@ -25,8 +25,11 @@ uint16_t curr_reading = 0;
 
 // create buffer globally
 int bufferSize = int(5*60*1000/SAMPLE_INTERVAL_MS); 
-DataBuffer noiseBuffer(bufferSize); // number of samples
 unsigned long lastSample = 0;
+// create buffers to hold 3 different AQI values
+DataBuffer pm25AqiBuffer(bufferSize);
+DataBuffer pm100AqiBuffer(bufferSize);
+DataBuffer ubaAqiBuffer(bufferSize);
 
 void setup() {
     Serial.begin(115200);
