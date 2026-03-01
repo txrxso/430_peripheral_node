@@ -1,16 +1,12 @@
-#include <ScioSense_ENS16x.h>
 #include "sensor.h"
 
 AirQualitySensor::AirQualitySensor() : 
-    _pmSensor(), _ensSensor(new ENS160()),
+    _pmSensor(), _ensSensor(&Wire, ENS160_AHT21_I2C_ADDR),
     // set all connected states to false  
     _pmConnected(false), _ensConnected(false), 
     // set all reading values to 0 
     _readings{0, 0, 0, 0, 0, 0, 0, 0} {}
 
-AirQualitySensor::~AirQualitySensor() {
-    delete _ensSensor;
-}
 
 bool AirQualitySensor::isPMConnected()  const { return _pmConnected; }
 bool AirQualitySensor::isENSConnected() const { return _ensConnected; }
@@ -24,8 +20,25 @@ void AirQualitySensor::begin() {
 
     _pmConnected = _pmSensor.begin_UART(&Serial1);
 
-    _ensSensor->begin(&Wire, ENS160_AHT21_I2C_ADDR);
-    _ensConnected = _ensSensor->init();
+    // begin AHT sensor 
+    bool aht_success = _aht21Sensor.begin();
+    #if SENSOR_DEBUG_MODE
+    if (aht_success == 0 ) {
+        Serial.println("AHT21 initialized.");
+    } else {
+        Serial.println("AHT21 failed to initialize.");
+        while (1) {
+            Serial.println("AHT21 failed to initialize.");
+            delay(1000);
+        }
+    }
+    #endif
+
+    // begin ENS sensor 
+    _ensSensor.begin();
+    _ensConnected = (_ensSensor.begin() == NO_ERR);
+
+    _ensSensor.setPWRMode(ENS160_STANDARD_MODE);
 
     while (!_pmConnected || !_ensConnected) {
         #if SENSOR_DEBUG_MODE
@@ -35,7 +48,7 @@ void AirQualitySensor::begin() {
         // try again
         #endif
         _pmConnected = _pmSensor.begin_UART(&Serial1);
-        _ensConnected = _ensSensor->init();
+        _ensConnected = (_ensSensor.begin() == 0);
         delay(1000);
     }
     
@@ -58,11 +71,19 @@ bool AirQualitySensor::update() {
         _pmConnected = false; // sync again
     }
 
-    if (_ensSensor->update() == RESULT_OK) {
+    uint8_t ens_status = _ensSensor.getENS160Status();
+    if (ens_status == 0x02 || ens_status == 0x03) { // Normal operation or warm-up mode
+        Serial.println("ENS160 data ready");
+        // if Temp and Humidity available, use to get more accurate reading
+        if (_aht21Sensor.startMeasurementReady(true)) {
+            float t = _aht21Sensor.getTemperature_C();
+            float h = _aht21Sensor.getHumidity_RH();
+            _ensSensor.setTempAndHum(t,h);
+        }
         _ensConnected = true; // sync again
-        _readings.tvoc = _ensSensor->getTvoc();
-        _readings.eco2 = _ensSensor->getEco2();
-        _readings.aqi_uba = (uint16_t)_ensSensor->getAirQualityIndex_UBA(); // cast from enum to uint16_t
+        _readings.tvoc = _ensSensor.getTVOC();
+        _readings.eco2 = _ensSensor.getECO2();
+        _readings.aqi_uba = _ensSensor.getAQI();
         ens_updated = true;
     } else {
         _ensConnected = false; // sync again
