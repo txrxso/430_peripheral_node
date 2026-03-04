@@ -11,6 +11,10 @@
 #define ALERT_RETRY_INTERVAL_MS 1000 // how often to resend unacked alert messages
 #define ALERT_SUPPRESS_DURATION 60000 // suppress further alerts for 1 minute if receive ALERT_CLEARED via CAN (to avoid clogging up the bus)
 
+// bit definitions for alert mask
+#define ALERT_AQI_UBA   (1 << 0) // AQI UBA
+#define ALERT_PM25      (1 << 1) // PM 2.5
+#define ALERT_PM100     (1 << 2) // PM 10
 
 // alert states 
 enum AlertState : uint8_t { 
@@ -31,10 +35,11 @@ struct __attribute__((packed)) HeartbeatFrame {
 
 // alert frame
 struct __attribute__((packed)) AlertFrame {
-  uint16_t aqi_pm_25_us;
-  uint16_t aqi_pm100_us;
-  uint16_t aqi_uba;
-  uint16_t reserved[1];
+  uint8_t alert_mask;      // bit 0 = AQI_UBA, bit 1 = PM2.5, bit 2 = PM10
+  uint8_t reserved;        // padding for alignment
+  uint16_t aqi_uba;        // only valid if alert_mask bit 0 set
+  uint16_t pm25_aqi;       // only valid if alert_mask bit 1 set
+  uint16_t pm100_aqi;      // only valid if alert_mask bit 2 set
 };
 
 // indicates priority for arbitration
