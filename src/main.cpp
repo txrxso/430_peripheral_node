@@ -15,6 +15,13 @@ Sends HEARTBEAT_RESPONSE.
 #define DEBUG_MODE 1
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 
+// --- ALERTING THRESHOLDS --- 
+// if curr_value >= threshold, trigger alert sending, and keep sending as long as the next sample is also above threshold
+// if curr_vale >= threshold, do not add to buffer 
+#define AQI_UBA_THRESHOLD 4 
+#define AQI_PM25_THRESHOLD 100
+#define AQI_PM10_THRESHOLD 100
+
 AirQualitySensor airQualitySensor; 
 
 AlertState alertState = ALERT_IDLE;
@@ -49,10 +56,18 @@ void handleSampling() {
     }
     #endif
 
-    // feed buffers 
-    pm25AqiBuffer.addSample(curr_reading.aqi_pm25_us);
-    pm100AqiBuffer.addSample(curr_reading.aqi_pm100_us);
-    ubaAqiBuffer.addSample(curr_reading.aqi_uba);
+    // TODO: check alert condition
+
+    // feed buffers - only if below the LIMIT to avoid polluting moving average values with 'alerting' values
+    if (curr_reading.aqi_pm25_us < AQI_PM25_THRESHOLD) {
+        pm25AqiBuffer.addSample(curr_reading.aqi_pm25_us);
+    } 
+    if (curr_reading.aqi_pm100_us < AQI_PM10_THRESHOLD) {
+        pm100AqiBuffer.addSample(curr_reading.aqi_pm100_us);
+    }
+    if (curr_reading.aqi_uba < AQI_UBA_THRESHOLD) {
+        ubaAqiBuffer.addSample(curr_reading.aqi_uba);
+    }
 
     lastSample = millis();
 
@@ -60,8 +75,6 @@ void handleSampling() {
     Serial.printf("Sampled - PM2.5 AQI: %d, PM10 AQI: %d, UBA: %d\n",
         curr_reading.aqi_pm25_us, curr_reading.aqi_pm100_us, curr_reading.aqi_uba);
     #endif
-
-    // TODO: check alert condition
 
   }
 
