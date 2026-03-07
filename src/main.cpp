@@ -22,6 +22,7 @@ AlertState alertState = ALERT_IDLE;
 unsigned long suppressUntil = 0;
 unsigned long lastAlertTx = 0;
 uint16_t curr_reading = 0;
+uint16_t alert_reading = 0; // stores the value that triggered the current alert (for retries)
 
 // global variables for exponential backoff
 uint8_t alertRetryCount = 0;
@@ -86,7 +87,8 @@ void handleSampling(uint16_t& curr_reading) {
       // do not add to buffer to avoid polluting the average
 
       if (alertState == ALERT_IDLE && millis() > suppressUntil) {
-        if (sendAlertMsg(curr_reading)) {
+        alert_reading = curr_reading; // Save the alert value for retries
+        if (sendAlertMsg(alert_reading)) {
           #if ENABLE_ACK
           alertState = ALERT_PENDING;  // Wait for ACK, keep retrying
           #else
@@ -94,7 +96,7 @@ void handleSampling(uint16_t& curr_reading) {
           #endif
           lastAlertTx = millis();
           #if DEBUG_MODE
-          Serial.println("[ALERT] Alert sent");
+          Serial.printf("[ALERT] Alert sent for %d dB\n", alert_reading);
           #endif
         }
       }
@@ -110,18 +112,17 @@ void handleSampling(uint16_t& curr_reading) {
 }
 
 void handleAlertStates() {
-  bool alertCondition = isAlertNeeded(curr_reading);
-
   #if ENABLE_ACK
   // ACK BASED MODE 
   
-  // only resend alert if no ACK after timeout AND not in suppression period
-  if (alertCondition && alertState == ALERT_PENDING && millis() > suppressUntil) { 
+  // Keep retrying until ACK received, regardless of current reading (TCP-like reliability)
+  // Only check: state is PENDING, not suppressed, and retry interval elapsed
+  if (alertState == ALERT_PENDING && millis() > suppressUntil) { 
     // check if need to retry 
     if ((millis() - lastAlertTx >= alertRetryInterval)){ 
-      if (sendAlertMsg(curr_reading)) { 
+      if (sendAlertMsg(alert_reading)) {  // Use saved alert value, not current reading
         #if DEBUG_MODE
-        Serial.println("[ALERT] Resent alert, still waiting for ACK...");
+        Serial.printf("[ALERT] Retry #%d for %d dB, waiting for ACK...\n", alertRetryCount + 1, alert_reading);
         #endif
         lastAlertTx = millis();
         alertRetryCount++;
