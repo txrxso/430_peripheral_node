@@ -14,6 +14,7 @@ Sends HEARTBEAT_RESPONSE.
 
 #define DEBUG_MODE 1
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
+#define ENABLE_ACK 0 // 0: fire and forget; 1: require ACK for alerts and resend if no ACK
 
 SoundSensor noiseSensor(34); 
 // GPIO 36? Need to check. Or see if can use other pin with internal pull up/down already.
@@ -21,6 +22,10 @@ AlertState alertState = ALERT_IDLE;
 unsigned long suppressUntil = 0;
 unsigned long lastAlertTx = 0;
 uint16_t curr_reading = 0;
+
+// global variables for exponential backoff
+uint8_t alertRetryCount = 0;
+unsigned long alertRetryInterval = ALERT_RETRY_INTERVAL_MS; // starts at this value
 
 
 // create buffer globally
@@ -58,16 +63,6 @@ uint16_t mockReadNoiseSensor() {
 }
 #endif 
 
-bool isAlertNeeded(uint16_t value) {
-  // for noise, send alert if > 100 dB 
-  if (value >= ALERT_THRESHOLD_DB) {
-    return true;
-  }
-  else {
-    return false;
-  }
-}
-
 void handleSampling(uint16_t& curr_reading) {
   // sample at fixed interval
   if (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
@@ -80,33 +75,38 @@ void handleSampling(uint16_t& curr_reading) {
     }
     #endif
 
-    noiseBuffer.addSample(curr_reading);
     lastSample = millis();
     
-    #if DEBUG_MODE
-    Serial.printf("Sampled: %d dB\n", curr_reading);
-    #endif
-
     // CHECK FOR ALERT CONDITION IMMEDIATELY AFTER SAMPLING
     // This ensures we don't miss alerts when curr_reading gets overwritten by next sample
     bool alertCondition = isAlertNeeded(curr_reading);
-    if (alertCondition && alertState == ALERT_IDLE && millis() > suppressUntil) {
-      if (sendAlertMsg(curr_reading)) {
-        #if DEBUG_MODE
-        Serial.println("[ALERT] Sent initial alert immediately after sampling, waiting for ACK...");
-        #endif
-        alertState = ALERT_PENDING;
-        lastAlertTx = millis();
+
+    // only add to buffer if not in alert condition and not currently suppressing alerts, to avoid polluting the average with alert readings
+    if (alertCondition) { 
+      // do not add to buffer to avoid polluting the average
+
+      if (alertState == ALERT_IDLE && millis() > suppressUntil) {
+        if (sendAlertMsg(curr_reading)) {
+          alertState = ALERT_PENDING;
+          lastAlertTx = millis();
+          #if DEBUG_MODE
+          Serial.println("[ALERT] Initial alert sent immediately after sampling.");
+          #endif
+        }
       }
+    } 
+    else {
+      noiseBuffer.addSample(curr_reading);
+      #if DEBUG_MODE
+      Serial.printf("Sampled: %d dB\n", curr_reading);
+      #endif
     }
+
   }
 }
 
 void handleAlertStates() {
   bool alertCondition = isAlertNeeded(curr_reading);
-  
-  // NOTE: Initial alert sending moved to handleSampling() to prevent missing alerts
-  // when curr_reading gets overwritten by next sample
   
   // only resend alert if no ACK after timeout
   if (alertCondition && alertState == ALERT_PENDING && (millis() - lastAlertTx >= ALERT_RETRY_INTERVAL_MS)) {

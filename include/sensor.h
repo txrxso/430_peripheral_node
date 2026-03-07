@@ -10,7 +10,9 @@
 
 #define VREF 3.3 
 #define ADC_MAX 4096 // ESP32 has 12 bit resolution
+#define ALERT_THRESHOLD_DB 100 // trigger alert threshold
 
+bool isAlertNeeded(uint16_t value);
 
 class SoundSensor {
     public: 

@@ -7,8 +7,9 @@
 #define CAN_TX_PIN 5
 #define CAN_RX_PIN 4
 #define SAMPLE_INTERVAL_MS 5000 // 5 seconds
-#define ALERT_THRESHOLD_DB 100 // trigger alert threshold
 #define ALERT_RETRY_INTERVAL_MS 1000 // how often to resend unacked alert messages
+#define ALERT_RETRY_BACKOFF_FACTOR 2 // exponential backoff factor for resending alerts (e.g. 1s, 2s, 4s, etc.)
+#define ALERT_MAX_RETRY_PERIOD 8000 // cap at 8 seconds
 #define ALERT_SUPPRESS_DURATION 60000 // suppress further alerts for 1 minute if receive ALERT_CLEARED via CAN (to avoid clogging up the bus)
 
 
@@ -35,8 +36,10 @@ struct __attribute__((packed)) AlertFrame {
 
 // indicates priority for arbitration
 enum CANPriority : uint8_t {
-    SAFETY_ALERT    = 0, // threshold exceeded, etc.
-    CONTROL   = 1, // gateway commands, acks, etc.
+    SAFETY_ALERT    = 0, // alerts AND their acks to break deadlock
+    // NOTE: acks are part of safety-critical alert loop so needs to break deadlock
+    CONTROL   = 1, // unused currently, but can be for future control messages 
+                  // (e.g. change sampling rate, connectivity options, etc.)
     HEARTBEAT = 2, // anything related to heartbeats 
 };
 

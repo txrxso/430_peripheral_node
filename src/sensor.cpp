@@ -1,5 +1,15 @@
 #include "sensor.h"
 
+bool isAlertNeeded(uint16_t value) {
+  // for noise, send alert if > 100 dB 
+  if (value >= ALERT_THRESHOLD_DB) {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
 // init
 SoundSensor::SoundSensor(uint8_t pin) 
 : _pin(pin), _currentReading(0), _connected(false) {}
