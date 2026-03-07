@@ -14,7 +14,7 @@ Sends HEARTBEAT_RESPONSE.
 
 #define DEBUG_MODE 1
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
-#define ENABLE_ACK 0 // 0: fire and forget; 1: require ACK for alerts and resend if no ACK
+#define ENABLE_ACK 1 // 0: fire and forget; 1: require ACK for alerts and resend if no ACK
 
 SoundSensor noiseSensor(34); 
 // GPIO 36? Need to check. Or see if can use other pin with internal pull up/down already.
@@ -87,10 +87,14 @@ void handleSampling(uint16_t& curr_reading) {
 
       if (alertState == ALERT_IDLE && millis() > suppressUntil) {
         if (sendAlertMsg(curr_reading)) {
-          alertState = ALERT_PENDING;
+          #if ENABLE_ACK
+          alertState = ALERT_PENDING;  // Wait for ACK, keep retrying
+          #else
+          alertState = ALERT_IDLE;     // Fire-and-forget: sent once, done
+          #endif
           lastAlertTx = millis();
           #if DEBUG_MODE
-          Serial.println("[ALERT] Initial alert sent immediately after sampling.");
+          Serial.println("[ALERT] Alert sent");
           #endif
         }
       }
@@ -107,36 +111,61 @@ void handleSampling(uint16_t& curr_reading) {
 
 void handleAlertStates() {
   bool alertCondition = isAlertNeeded(curr_reading);
+
+  #if ENABLE_ACK
+  // ACK BASED MODE 
   
-  // only resend alert if no ACK after timeout
-  if (alertCondition && alertState == ALERT_PENDING && (millis() - lastAlertTx >= ALERT_RETRY_INTERVAL_MS)) {
-    if (sendAlertMsg(curr_reading)) {
-      #if DEBUG_MODE
-      Serial.println("[ALERT] Resent alert, still waiting for ACK...");
-      #endif
-      lastAlertTx = millis();
+  // only resend alert if no ACK after timeout AND not in suppression period
+  if (alertCondition && alertState == ALERT_PENDING && millis() > suppressUntil) { 
+    // check if need to retry 
+    if ((millis() - lastAlertTx >= alertRetryInterval)){ 
+      if (sendAlertMsg(curr_reading)) { 
+        #if DEBUG_MODE
+        Serial.println("[ALERT] Resent alert, still waiting for ACK...");
+        #endif
+        lastAlertTx = millis();
+        alertRetryCount++;
+
+        // bounded exponential backoff for retry interval
+        alertRetryInterval = min(ALERT_RETRY_INTERVAL_MS * (1 << alertRetryCount), 
+        ALERT_MAX_RETRY_PERIOD); // double the interval, cap at max
+      }
     }
   }
 
-  else if (!alertCondition && alertState != ALERT_IDLE) {
-    // clear alert state
-    alertState = ALERT_IDLE;
-    suppressUntil = millis() + ALERT_SUPPRESS_DURATION; // set suppress duration
+  // when ACK is received (handled in handleIncomingMsg), reset backoff 
+  if (alertState == ALERT_ACKED) {
+    alertRetryCount = 0;
+    alertRetryInterval = ALERT_RETRY_INTERVAL_MS; // reset to initial value
     #if DEBUG_MODE
-    Serial.println("[ALERT] Alert condition cleared, returning to IDLE state.");
+    Serial.println("[ALERT] ACK received, reset retry count and interval.");
     #endif
-
+    // reset alert state
+    alertState = ALERT_IDLE; 
+    /* NOTE: 
+    Set back to IDLE state so if we get a new alert condition after taking the next sample, then we can still trigger new alert 
+    (relying on condition check in handleSampling to trigger alert immediately after sampling.
+    There should only be one alert per current sample.
+   */
+     
   }
-
-  // always check the timer for ALERT_SUPRESS_DURATION and see if suppression over
-  if (alertState == ALERT_IDLE && millis() > suppressUntil) {
-    // suppression period over, ready to send alerts again
+  #endif
+   
+  // Handle manual ALERT_CLEARED (set by incoming.cpp when gateway sends clear command)
+  if (alertState == ALERT_CLEAR) {
+    // Stop retrying, set suppression, return to IDLE
+    alertRetryCount = 0;
+    alertRetryInterval = ALERT_RETRY_INTERVAL_MS;
+    suppressUntil = millis() + ALERT_SUPPRESS_DURATION;
+    alertState = ALERT_IDLE;
+    
     #if DEBUG_MODE
-    Serial.println("[ALERT] Suppression period over, ready to send alerts.");
+    Serial.println("[ALERT] Received ALERT_CLEARED, suppressing alerts for 1 minute");
     #endif
   }
 
 }
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);

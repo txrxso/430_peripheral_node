@@ -46,8 +46,7 @@ void handleIncomingMsg(DataBuffer& dataBuffer, AlertState& alertState, unsigned 
         }
     }
 
-    else if (msgType == ALERT_CLEARED && nodeId == GATEWAY_NODE) { 
-        suppressUntil = millis() + ALERT_SUPPRESS_DURATION; 
+    else if (msgType == ALERT_CLEARED && nodeId == GATEWAY_NODE) { // MANUAL BUTTON CANCELLEATIOn
         alertState = ALERT_CLEAR;
         #if DEBUG_MODE_INCOMING
         Serial.println("Received ALERT_CLEARED from Gateway. Suppressing alerts for a duration.");
