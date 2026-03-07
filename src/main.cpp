@@ -15,7 +15,7 @@ Sends HEARTBEAT_RESPONSE.
 #define DEBUG_MODE 1
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 
-SoundSensor noiseSensor(A0); 
+SoundSensor noiseSensor(34); 
 // GPIO 36? Need to check. Or see if can use other pin with internal pull up/down already.
 AlertState alertState = ALERT_IDLE;
 unsigned long suppressUntil = 0;
