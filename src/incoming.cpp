@@ -63,10 +63,9 @@ void handleIncomingMsg(
         }
 
         else if (msgType == ALERT_CLEARED && nodeId == GATEWAY_NODE) { 
-            suppressUntil = millis() + ALERT_SUPPRESS_DURATION; 
-            alertState = ALERT_CLEAR;
+            alertState = ALERT_CLEAR;  // Only set state, suppressUntil handled in main.cpp
             #if DEBUG_MODE_INCOMING
-            Serial.println("Received ALERT_CLEARED from Gateway. Suppressing alerts for a duration.");
+            Serial.println("Received ALERT_CLEARED from Gateway. Will suppress alerts.");
             #endif
         }
 

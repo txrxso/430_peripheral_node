@@ -19,6 +19,9 @@
 #define PM_RX_PIN 26 // Connects to PMS5003 TX - taken from newest commit
 #define PM_TX_PIN 27 // Connects to PMS5003 RX
 
+#define AQI_UBA_THRESHOLD 4 
+#define AQI_PM25_THRESHOLD 100
+#define AQI_PM10_THRESHOLD 100
 
 struct AQReading {
     uint16_t pm25, pm10, pm100;
@@ -26,6 +29,8 @@ struct AQReading {
     uint16_t  aqi_uba;
     uint16_t aqi_pm25_us, aqi_pm100_us;
 };
+
+bool isAlertNeeded(const AQReading& reading);
 
 // group both PM and ENS sensor into one class for easier handling
 class AirQualitySensor {

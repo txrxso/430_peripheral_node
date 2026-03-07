@@ -1,5 +1,11 @@
 #include "sensor.h"
 
+bool isAlertNeeded(const AQReading& reading) {
+    return (reading.aqi_uba >= AQI_UBA_THRESHOLD) || 
+           (reading.aqi_pm25_us >= AQI_PM25_THRESHOLD) || 
+           (reading.aqi_pm100_us >= AQI_PM10_THRESHOLD);
+}
+
 AirQualitySensor::AirQualitySensor() : 
     _pmSensor(), _ensSensor(&Wire, ENS160_AHT21_I2C_ADDR),
     // set all connected states to false  
