@@ -16,7 +16,7 @@ Sends HEARTBEAT_RESPONSE.
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 #define ENABLE_ACK 1 // 0: fire and forget; 1: require ACK for alerts and resend if no ACK
 #define ALERT_INJECTION 1 // 1: inject alert values for testing (uses real sensor + injected alerts)
-#define INJECTION_INTERVAL_MS 180000 // inject alert every N milliseconds (e.g., 3 minutes, 5 minutes, 10 minutes)
+#define INJECTION_INTERVAL_MS 30000// 180000 // inject alert every N milliseconds (e.g., 3 minutes, 5 minutes, 10 minutes)
 
 SoundSensor noiseSensor(34); 
 // GPIO 36? Need to check. Or see if can use other pin with internal pull up/down already.
@@ -26,10 +26,13 @@ unsigned long lastAlertTx = 0;
 uint16_t curr_reading = 0;
 uint16_t alert_reading = 0; // stores the value that triggered the current alert (for retries)
 
+// Sequence number tracking for duplicate detection
+uint8_t alert_seq_num = 0;       // global sequence counter (0-255, wraps)
+uint8_t alert_seq_saved = 0;     // saved seq_num for current alert being retried
+
 // global variables for exponential backoff
 uint8_t alertRetryCount = 0;
 unsigned long alertRetryInterval = ALERT_RETRY_INTERVAL_MS; // starts at this value
-
 
 // create buffer globally
 int bufferSize = int(5*60*1000/SAMPLE_INTERVAL_MS); 
@@ -105,7 +108,10 @@ void handleSampling(uint16_t& curr_reading) {
 
       if (alertState == ALERT_IDLE && millis() > suppressUntil) {
         alert_reading = curr_reading; // Save the alert value for retries
-        if (sendAlertMsg(alert_reading)) {
+        alert_seq_saved = alert_seq_num; // Save sequence number for retries
+        alert_seq_num = (alert_seq_num + 1) % 256; // Increment for next alert (wraps at 256)
+        
+        if (sendAlertMsg(alert_reading, alert_seq_saved)) {
           #if ENABLE_ACK
           alertState = ALERT_PENDING;  // Wait for ACK, keep retrying
           #else
@@ -113,7 +119,7 @@ void handleSampling(uint16_t& curr_reading) {
           #endif
           lastAlertTx = millis();
           #if DEBUG_MODE
-          Serial.printf("[ALERT] Alert sent for %d dB\n", alert_reading);
+          Serial.printf("[ALERT] Alert sent (seq: %u, %d dB)\n", alert_seq_saved, alert_reading);
           #endif
         }
       }
@@ -137,9 +143,9 @@ void handleAlertStates() {
   if (alertState == ALERT_PENDING && millis() > suppressUntil) { 
     // check if need to retry 
     if ((millis() - lastAlertTx >= alertRetryInterval)){ 
-      if (sendAlertMsg(alert_reading)) {  // Use saved alert value, not current reading
+      if (sendAlertMsg(alert_reading, alert_seq_saved)) {  // Use saved alert value and seq_num
         #if DEBUG_MODE
-        Serial.printf("[ALERT] Retry #%d for %d dB, waiting for ACK...\n", alertRetryCount + 1, alert_reading);
+        Serial.printf("[ALERT] Retry #%d (seq: %u, %d dB), waiting for ACK...\n", alertRetryCount + 1, alert_seq_saved, alert_reading);
         #endif
         lastAlertTx = millis();
         alertRetryCount++;

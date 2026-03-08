@@ -7,6 +7,6 @@
 
 // outgoing message functions
 bool sendHeartbeatResponse(const HeartbeatFrame& hbFrame);
-bool sendAlertMsg(uint16_t noise_db);
+bool sendAlertMsg(uint16_t noise_db, uint8_t seq_num);
 
 #endif 

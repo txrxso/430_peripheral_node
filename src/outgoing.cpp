@@ -32,11 +32,13 @@ bool sendHeartbeatResponse(const HeartbeatFrame& hbFrame) {
 
 }
 
-bool sendAlertMsg(uint16_t noise_db) { 
+bool sendAlertMsg(uint16_t noise_db, uint8_t seq_num) { 
   // spikes in values are less concerning for noise than continuous exposure - EXCEPT for 'instant damage/hazard' cases
   twai_message_t outgoing_msg;
   AlertFrame frame;
 
+  frame.seq_num = seq_num;
+  frame.reserved1 = 0;
   frame.noise_db = noise_db;
   memset(frame.reserved, 0, sizeof(frame.reserved));
 
@@ -50,7 +52,7 @@ bool sendAlertMsg(uint16_t noise_db) {
 
   #if DEBUG_MODE_OUTGOING
   if (status == ESP_OK) {
-    Serial.printf("ALERT_NOTIFICATION sent (%d dB)\n", noise_db);
+    Serial.printf("ALERT_NOTIFICATION sent (seq: %u, %d dB)\n", seq_num, noise_db);
   } else {
     Serial.printf("ALERT_NOTIFICATION TX failed (%d)\n", status);
   }

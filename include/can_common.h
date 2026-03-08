@@ -28,11 +28,13 @@ struct __attribute__((packed)) HeartbeatFrame {
   uint16_t reserved[3]; // to make sure 8 bytes in data expected
 }; 
 
-// alert frame
-struct __attribute__((packed)) AlertFrame {
+// alert frame (with sequence number for duplicate detection)
+typedef struct {
+  uint8_t seq_num;        // 0-255, wraps around
+  uint8_t reserved1;      // padding
   uint16_t noise_db;
-  uint16_t reserved[3];
-};
+  uint16_t reserved[2];   // to make sure 8 bytes in data expected
+} __attribute__((packed)) AlertFrame;
 
 // indicates priority for arbitration
 enum CANPriority : uint8_t {
