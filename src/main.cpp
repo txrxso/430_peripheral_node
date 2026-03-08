@@ -15,6 +15,8 @@ Sends HEARTBEAT_RESPONSE.
 #define DEBUG_MODE 1
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 #define ENABLE_ACK 1 // 0: fire and forget; 1: require ACK for alerts and resend if no ACK
+#define ALERT_INJECTION 1 // 1: inject alert values for testing (uses real sensor + injected alerts)
+#define INJECTION_INTERVAL_MS 180000 // inject alert every N milliseconds (e.g., 3 minutes, 5 minutes, 10 minutes)
 
 SoundSensor noiseSensor(34); 
 // GPIO 36? Need to check. Or see if can use other pin with internal pull up/down already.
@@ -33,6 +35,10 @@ unsigned long alertRetryInterval = ALERT_RETRY_INTERVAL_MS; // starts at this va
 int bufferSize = int(5*60*1000/SAMPLE_INTERVAL_MS); 
 DataBuffer noiseBuffer(bufferSize); // number of samples
 unsigned long lastSample = 0;
+
+#if ALERT_INJECTION
+unsigned long lastInjection = 0; // track last injection time
+#endif
 
 
 /* 
@@ -69,10 +75,21 @@ void handleSampling(uint16_t& curr_reading) {
   if (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
     // continuously sample noise 
     #if SENSOR_MOCK 
-    curr_reading = mockReadNoiseSensor(); // TO DO: replace with real sensor reading
+    curr_reading = mockReadNoiseSensor();
     #else 
     if (noiseSensor.update()) {
       curr_reading = noiseSensor.getCurrentReading();
+      
+      // overwrite with alert value if injection is enabled and interval elapsed
+      #if ALERT_INJECTION
+      if (millis() - lastInjection >= INJECTION_INTERVAL_MS) {
+        curr_reading = 115; // inject alert value > 100 dB
+        lastInjection = millis();
+        #if DEBUG_MODE
+        Serial.println("[INJECTION] Injected alert value: 115 dB");
+        #endif
+      }
+      #endif
     }
     #endif
 
