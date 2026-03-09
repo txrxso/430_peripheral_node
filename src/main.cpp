@@ -15,6 +15,8 @@ Sends HEARTBEAT_RESPONSE.
 #define DEBUG_MODE 1
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 #define ENABLE_ACK 1 
+#define ALERT_INJECTION 1 // set to 1 to randomly inject alerts for testing, set to 0 for normal operation
+#define INJECTION_INTERVAL_MS 60000 
 
 // --- ALERTING THRESHOLDS --- 
 // if curr_value >= threshold, trigger alert sending, and keep sending as long as the next sample is also above threshold
@@ -32,6 +34,10 @@ AQReading alert_reading = {0, 0, 0, 0, 0, 0, 0, 0}; // to hold the reading that 
 // global variables for exponential backoff 
 uint8_t alertRetryCount = 0;
 unsigned long alertRetryInterval = ALERT_RETRY_INTERVAL_MS; 
+
+// Sequence number tracking for duplicate detection
+uint8_t alert_seq_num = 0;       // global sequence counter (0-255, wraps)
+uint8_t alert_seq_saved = 0;     // saved seq_num for current alert being retried
 
 // create buffer globally
 int bufferSize = int(5*60*1000/SAMPLE_INTERVAL_MS); 
@@ -65,7 +71,10 @@ void handleSampling() {
     if (alertCondition) { 
       if (alertState == ALERT_IDLE && millis() > suppressUntil) { 
         alert_reading = curr_reading; // capture the reading that triggered the alert
-        if (sendAlertMsg(&alert_reading.aqi_uba, &alert_reading.aqi_pm25_us, &alert_reading.aqi_pm100_us)) {
+        alert_seq_saved = alert_seq_num; // save the current sequence number
+        alert_seq_num = (alert_seq_num + 1) % 256; // increment global sequence number for next alert
+
+        if (sendAlertMsg(&alert_reading.aqi_uba, &alert_reading.aqi_pm25_us, &alert_reading.aqi_pm100_us, alert_seq_saved)) {
           #if ENABLE_ACK 
           alertState = ALERT_PENDING;
           #else 
@@ -73,7 +82,7 @@ void handleSampling() {
           #endif
           lastAlertTx = millis();
           #if DEBUG_MODE
-          Serial.println("Alert sent. Entering ALERT_PENDING state.");
+          Serial.println("Alert sent. Entering ALERT_PENDING state. Seq_number: " + String(alert_seq_saved));
           #endif
         } else {
           #if DEBUG_MODE
@@ -110,9 +119,13 @@ void handleAlertStates() {
 
   if (alertState == ALERT_PENDING && millis() > suppressUntil) { 
     if ((millis() - lastAlertTx >= alertRetryInterval)){ 
-      if (sendAlertMsg(&alert_reading.aqi_uba, &alert_reading.aqi_pm25_us, &alert_reading.aqi_pm100_us)) {  // Use saved alert value, not current reading
+      if (sendAlertMsg(&alert_reading.aqi_uba, &alert_reading.aqi_pm25_us, &alert_reading.aqi_pm100_us, alert_seq_saved)) {  // Use saved alert value, not current reading
         lastAlertTx = millis();
         alertRetryCount++;
+
+        #if DEBUG_MODE
+        Serial.println("Resent alert message. Seq_number: " + String(alert_seq_saved) + ". Retry count: " + String(alertRetryCount));
+        #endif
 
         // bounded exponential backoff for retry interval
         alertRetryInterval = min(ALERT_RETRY_INTERVAL_MS * (1 << alertRetryCount), 

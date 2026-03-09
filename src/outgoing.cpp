@@ -31,7 +31,7 @@ bool sendHeartbeatResponse(const HeartbeatFrame& hbFrame) {
 
 }
 
-bool sendAlertMsg(const uint16_t* aqi_uba, const uint16_t* pm25_aqi, const uint16_t* pm100_aqi) {
+bool sendAlertMsg(const uint16_t* aqi_uba, const uint16_t* pm25_aqi, const uint16_t* pm100_aqi, uint8_t seq_num) {
     twai_message_t outgoing_msg;
     AlertFrame alertFrame;
     memset(&alertFrame, 0, sizeof(AlertFrame)); // initialize all fields to 0
@@ -49,6 +49,9 @@ bool sendAlertMsg(const uint16_t* aqi_uba, const uint16_t* pm25_aqi, const uint1
         alertFrame.pm100_aqi = *pm100_aqi;
         alertFrame.alert_mask |= ALERT_PM100;
     }
+
+    // set sequence number 
+    alertFrame.seq_num = seq_num;
 
     /*
     NOTE: 
@@ -68,9 +71,9 @@ bool sendAlertMsg(const uint16_t* aqi_uba, const uint16_t* pm25_aqi, const uint1
 
     #if DEBUG_MODE_OUTGOING
     if (status == ESP_OK) {
-        Serial.println("Alert sent successfully");
+        Serial.printf("Alert sent successfully. Seq number: %u\n", alertFrame.seq_num);
     } else if (status == ESP_ERR_TIMEOUT) {
-        Serial.println("CAN TX failed: Timeout");
+        Serial.println("CAN TX failed: Timeout\n");
     } else {
         Serial.printf("CAN TX failed: Error code %d\n", status);
     }

@@ -37,8 +37,8 @@ struct __attribute__((packed)) HeartbeatFrame {
 
 // alert frame
 struct __attribute__((packed)) AlertFrame {
+  uint8_t seq_num;        // 0-255, wraps around 
   uint8_t alert_mask;      // bit 0 = AQI_UBA, bit 1 = PM2.5, bit 2 = PM10
-  uint8_t reserved;        // padding for alignment
   uint16_t aqi_uba;        // only valid if alert_mask bit 0 set
   uint16_t pm25_aqi;       // only valid if alert_mask bit 1 set
   uint16_t pm100_aqi;      // only valid if alert_mask bit 2 set

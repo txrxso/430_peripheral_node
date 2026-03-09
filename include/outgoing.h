@@ -9,6 +9,6 @@ bool sendHeartbeatResponse(const HeartbeatFrame& hbFrame);
 
 // pass nullptr for any value that is not relevant to the alert 
 // (e.g. if only PM2.5 exceeds threshold, pass in the PM2.5 value and nullptr for the other 2 parameters)
-bool sendAlertMsg(const uint16_t* aqi_uba, const uint16_t* pm25_aqi, const uint16_t* pm100_aqi);
+bool sendAlertMsg(const uint16_t* aqi_uba, const uint16_t* pm25_aqi, const uint16_t* pm100_aqi, uint8_t seq_num); // optional sequence number for duplicate detection, default to 0 if not provided 
 
 #endif 
