@@ -18,7 +18,21 @@ bool AirQualitySensor::isPMConnected()  const { return _pmConnected; }
 bool AirQualitySensor::isENSConnected() const { return _ensConnected; }
 
 void AirQualitySensor::begin() {
-    Wire.begin();
+    Wire.begin(21, 22);
+    Wire.setClock(100000);
+    delay(500); // Increased delay for I2C stabilization
+
+    #if SENSOR_DEBUG_MODE
+    // Scan I2C bus for debugging
+    Serial.println("Scanning I2C bus...");
+    for (uint8_t addr = 1; addr < 127; addr++) {
+        Wire.beginTransmission(addr);
+        if (Wire.endTransmission() == 0) {
+            Serial.print("I2C device found at 0x");
+            Serial.println(addr, HEX);
+        }
+    }
+    #endif
 
     // Initialize UART for PM sensor
     Serial2.begin(9600, SERIAL_8N1, PM_RX_PIN, PM_TX_PIN);
@@ -40,11 +54,23 @@ void AirQualitySensor::begin() {
     }
     #endif
 
-    // begin ENS sensor 
-    _ensSensor.begin();
-    _ensConnected = (_ensSensor.begin() == NO_ERR);
+    // begin ENS sensor - call only once and check result
+    int8_t ens_status = _ensSensor.begin();
+    _ensConnected = (ens_status == NO_ERR);
+    
+    #if SENSOR_DEBUG_MODE
+    Serial.print("ENS160 begin() returned: ");
+    Serial.println(ens_status);
+    if (_ensConnected) {
+        Serial.println("ENS160 initialized successfully.");
+    } else {
+        Serial.println("ENS160 failed to initialize. Check I2C address (0x52 or 0x53) and wiring.");
+    }
+    #endif
 
-    _ensSensor.setPWRMode(ENS160_STANDARD_MODE);
+    if (_ensConnected) {
+        _ensSensor.setPWRMode(ENS160_STANDARD_MODE);
+    }
 
     while (!_pmConnected || !_ensConnected) {
         #if SENSOR_DEBUG_MODE
@@ -53,9 +79,24 @@ void AirQualitySensor::begin() {
         Serial.println(isENSConnected() ? "ENS sensor is connected." : "ENS sensor is not connected.");
         // try again
         #endif
-        _pmConnected = _pmSensor.begin_UART(&Serial2);
-        _ensConnected = (_ensSensor.begin() == 0);
-        delay(1000);
+        
+        if (!_pmConnected) {
+            _pmConnected = _pmSensor.begin_UART(&Serial2);
+            delay(3000);
+        }
+        
+        if (!_ensConnected) {
+            int8_t ens_result = _ensSensor.begin();
+            _ensConnected = (ens_result == NO_ERR);
+            #if SENSOR_DEBUG_MODE
+            Serial.print("ENS160 retry returned: ");
+            Serial.println(ens_result);
+            #endif
+            if (_ensConnected) {
+                _ensSensor.setPWRMode(ENS160_STANDARD_MODE);
+            }
+            delay(1000);
+        }
     }
     
 }
