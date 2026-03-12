@@ -6,9 +6,10 @@
 
 #define CAN_TX_PIN 5
 #define CAN_RX_PIN 4
-#define SAMPLE_INTERVAL_MS 5000 // 5 seconds
+#define POLL_INTERVAL_MS 1000 // Poll sensors every 1 second (matches PMS5003 transmission rate)
+#define SAMPLE_INTERVAL_MS 5000 // Buffer samples every 5 seconds for averaging
 #define ALERT_THRESHOLD_DB 100 // trigger alert threshold
-#define ALERT_RETRY_INTERVAL_MS 1000 // how often to resend unacked alert messages
+#define ALERT_RETRY_INTERVAL_MS 5000 // how often to resend unacked alert messages
 #define ALERT_RETRY_BACKOFF_FACTOR 2 // exponential backoff factor for resending alerts (e.g. 1s, 2s, 4s, etc.)
 #define ALERT_MAX_RETRY_PERIOD 8000 // cap at 8 seconds
 #define ALERT_SUPPRESS_DURATION 60000 // suppress further alerts for 1 minute if receive ALERT_CLEARED via CAN (to avoid clogging up the bus)

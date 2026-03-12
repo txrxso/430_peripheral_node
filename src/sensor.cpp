@@ -85,7 +85,13 @@ void AirQualitySensor::begin() {
         #endif
         
         if (!_pmConnected) {
+            #if SENSOR_DEBUG_MODE
+            Serial.printf("Retrying PM sensor initialization (attempt %d)...\n", retryCount + 1);
+            #endif
             _pmConnected = _pmSensor.begin_UART(&Serial2);
+            #if SENSOR_DEBUG_MODE
+            Serial.printf("  Result: %s\n", _pmConnected ? "SUCCESS" : "FAILED");
+            #endif
             delay(3000);
         }
         
@@ -132,8 +138,40 @@ bool AirQualitySensor::update() {
         _readings.aqi_pm100_us = pmData.aqi_pm100_us;
         _readings.aqi_pm25_us = pmData.aqi_pm25_us;
         pm_updated = true;
+        
+        #if SENSOR_DEBUG_MODE
+        Serial.println("---------------------------------------");
+        Serial.println("PM Sensor - Concentration Units (standard)");
+        Serial.print("PM 1.0: "); Serial.print(pmData.pm10_standard);
+        Serial.print("\t\tPM 2.5: "); Serial.print(pmData.pm25_standard);
+        Serial.print("\t\tPM 10: "); Serial.println(pmData.pm100_standard);
+        Serial.println("PM Sensor - Concentration Units (environmental)");
+        Serial.print("PM 1.0: "); Serial.print(pmData.pm10_env);
+        Serial.print("\t\tPM 2.5: "); Serial.print(pmData.pm25_env);
+        Serial.print("\t\tPM 10: "); Serial.println(pmData.pm100_env);
+        Serial.println("PM Sensor - Particle Counts");
+        Serial.print("Particles > 0.3um / 0.1L air: "); Serial.println(pmData.particles_03um);
+        Serial.print("Particles > 0.5um / 0.1L air: "); Serial.println(pmData.particles_05um);
+        Serial.print("Particles > 1.0um / 0.1L air: "); Serial.println(pmData.particles_10um);
+        Serial.print("Particles > 2.5um / 0.1L air: "); Serial.println(pmData.particles_25um);
+        Serial.print("Particles > 5.0um / 0.1L air: "); Serial.println(pmData.particles_50um);
+        Serial.print("Particles > 10 um / 0.1L air: "); Serial.println(pmData.particles_100um);
+        Serial.println("PM Sensor - AQI Values");
+        Serial.print("AQI PM2.5 (US): "); Serial.print(pmData.aqi_pm25_us);
+        Serial.print("\t\tAQI PM10 (US): "); Serial.println(pmData.aqi_pm100_us);
+        Serial.println("---------------------------------------");
+        #endif
     } else {
         _pmConnected = false; // sync again
+        #if SENSOR_DEBUG_MODE
+        static unsigned long lastPmError = 0;
+        if (millis() - lastPmError > 10000) { // Print error every 10 seconds
+            Serial.println("PM sensor read failed - no valid data received on Serial2");
+            Serial.printf("  Check: RX pin %d should connect to PM sensor TX\n", PM_RX_PIN);
+            Serial.printf("         TX pin %d should connect to PM sensor RX\n", PM_TX_PIN);
+            lastPmError = millis();
+        }
+        #endif
     }
 
     uint8_t ens_status = _ensSensor.getENS160Status();

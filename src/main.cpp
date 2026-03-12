@@ -41,6 +41,7 @@ uint8_t alert_seq_saved = 0;     // saved seq_num for current alert being retrie
 
 // create buffer globally
 int bufferSize = int(5*60*1000/SAMPLE_INTERVAL_MS); 
+unsigned long lastPoll = 0;
 unsigned long lastSample = 0;
 // create buffers to hold 3 different AQI values
 DataBuffer pm25AqiBuffer(bufferSize);
@@ -56,7 +57,8 @@ AQReading mockAQReading() {
 
 // ===== HELPERS ======
 void handleSampling() { 
-  if (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
+  // Poll sensor every 1 second to keep it active and check for alerts
+  if (millis() - lastPoll >= POLL_INTERVAL_MS) {
 
     #if SENSOR_MOCK
     curr_reading = mockAQReading();
@@ -66,7 +68,7 @@ void handleSampling() {
     }
     #endif
 
-    // check alert condition
+    // Check alert condition on every poll (1 second)
     bool alertCondition = isAlertNeeded(curr_reading);
     if (alertCondition) { 
       if (alertState == ALERT_IDLE && millis() > suppressUntil) { 
@@ -93,22 +95,32 @@ void handleSampling() {
           lastAlertTx = millis();
         }
       }
-    } 
-    else {
-      // feed buffers 
+    }
+
+    lastPoll = millis();
+
+    #if DEBUG_MODE
+    Serial.printf("Polled - PM2.5 AQI: %d, PM10 AQI: %d, UBA: %d\n",
+        curr_reading.aqi_pm25_us, curr_reading.aqi_pm100_us, curr_reading.aqi_uba);
+    #endif
+  }
+
+  // Buffer samples every 5 seconds (every 5th poll) if NOT an alert
+  if (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
+    bool alertCondition = isAlertNeeded(curr_reading);
+    if (!alertCondition) {
+      // Only feed buffers if not in alert condition
       pm25AqiBuffer.addSample(curr_reading.aqi_pm25_us);
       pm100AqiBuffer.addSample(curr_reading.aqi_pm100_us);
       ubaAqiBuffer.addSample(curr_reading.aqi_uba);
+      
+      #if DEBUG_MODE
+      Serial.printf("Buffered sample - PM2.5 AQI: %d, PM10 AQI: %d, UBA: %d\n",
+          curr_reading.aqi_pm25_us, curr_reading.aqi_pm100_us, curr_reading.aqi_uba);
+      #endif
     }
 
-
     lastSample = millis();
-
-    #if DEBUG_MODE
-    Serial.printf("Sampled - PM2.5 AQI: %d, PM10 AQI: %d, UBA: %d\n",
-        curr_reading.aqi_pm25_us, curr_reading.aqi_pm100_us, curr_reading.aqi_uba);
-    #endif
-
   }
 
 }
