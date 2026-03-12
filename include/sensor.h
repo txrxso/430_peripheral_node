@@ -40,6 +40,8 @@ class AirQualitySensor {
         void begin(); 
         bool update(); 
         AQReading getReading() const;
+        bool isPMConnected() const;
+        bool isENSConnected() const;
 
     private: 
         Adafruit_PM25AQI _pmSensor;
@@ -50,9 +52,6 @@ class AirQualitySensor {
         bool _pmConnected;
         bool _ensConnected;
         AQReading _readings;
-        
-        bool isPMConnected() const;
-        bool isENSConnected() const;
 
 };
 

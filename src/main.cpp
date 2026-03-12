@@ -180,15 +180,28 @@ void setup() {
     airQualitySensor.begin();
     #endif
 
-    twai_filter_config_t f_config = {
-    .acceptance_code = ((uint32_t)GATEWAY_NODE << 21), // accept when NodeID == 0x01 
-    .acceptance_mask =  ((uint32_t)0x07 << 21), // check only Node ID bits
-    .single_filter = true
-  };
+    // Note: Using ACCEPT_ALL filter from initCAN() - no need to reconfigure
+    // If filtering needed in future, apply with twai_driver_install() or twai_reconfigure_alerts()
 
 }
 
 void loop() { 
+  // Check CAN bus health
+  twai_status_info_t status_info;
+  if (twai_get_status_info(&status_info) == ESP_OK) {
+    if (status_info.state == TWAI_STATE_BUS_OFF) {
+      #if DEBUG_MODE
+      Serial.println("CAN BUS-OFF detected! Attempting recovery...");
+      #endif
+      twai_initiate_recovery();
+      delay(100);
+    } else if (status_info.state == TWAI_STATE_RECOVERING) {
+      #if DEBUG_MODE
+      Serial.println("CAN bus in recovery mode...");
+      #endif
+    }
+  }
+
   handleSampling();
   handleIncomingMsg(pm25AqiBuffer, pm100AqiBuffer, ubaAqiBuffer, alertState, suppressUntil, airQualitySensor);
   handleAlertStates();

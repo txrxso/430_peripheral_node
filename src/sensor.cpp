@@ -47,10 +47,6 @@ void AirQualitySensor::begin() {
         Serial.println("AHT21 initialized.");
     } else {
         Serial.println("AHT21 failed to initialize.");
-        while (1) {
-            Serial.println("AHT21 failed to initialize.");
-            delay(1000);
-        }
     }
     #endif
 
@@ -72,12 +68,20 @@ void AirQualitySensor::begin() {
         _ensSensor.setPWRMode(ENS160_STANDARD_MODE);
     }
 
-    while (!_pmConnected || !_ensConnected) {
+    // Retry sensor initialization with timeout to prevent infinite blocking
+    unsigned long retryStart = millis();
+    const unsigned long INIT_TIMEOUT_MS = 30000; // 30 second timeout
+    int retryCount = 0;
+    const int MAX_RETRIES = 5;
+
+    while ((!_pmConnected || !_ensConnected) && 
+           (millis() - retryStart < INIT_TIMEOUT_MS) && 
+           (retryCount < MAX_RETRIES)) {
         #if SENSOR_DEBUG_MODE
         Serial.println("At least one sensor was unable to be initialized.");
         Serial.println(isPMConnected() ? "PM sensor is connected." : "PM sensor is not connected.");
         Serial.println(isENSConnected() ? "ENS sensor is connected." : "ENS sensor is not connected.");
-        // try again
+        Serial.printf("Retry attempt %d/%d\n", retryCount + 1, MAX_RETRIES);
         #endif
         
         if (!_pmConnected) {
@@ -97,7 +101,21 @@ void AirQualitySensor::begin() {
             }
             delay(1000);
         }
+        
+        retryCount++;
     }
+    
+    // Final status report
+    #if SENSOR_DEBUG_MODE
+    Serial.println("=== Sensor Initialization Complete ===");
+    Serial.printf("PM Sensor: %s\n", _pmConnected ? "CONNECTED" : "FAILED");
+    Serial.printf("ENS160 Sensor: %s\n", _ensConnected ? "CONNECTED" : "FAILED");
+    if (!_pmConnected || !_ensConnected) {
+        Serial.println("WARNING: Continuing with partial sensor functionality");
+        Serial.println("CAN communication will proceed normally");
+    }
+    Serial.println("======================================");
+    #endif
     
 }
 

@@ -24,24 +24,27 @@ void handleIncomingMsg(
         CANMessageType msgType = static_cast<CANMessageType>((id >> 3) & 0x1F);
         NodeID nodeId = static_cast<NodeID>(id & 0x07);
 
+        #if DEBUG_MODE_INCOMING
+        Serial.printf("Received CAN Msg - ID: 0x%03X, Priority: %d, Type: %d, From Node: 0x%02X, RTR: %d, DLC: %d\n", 
+                      id, priority, msgType, nodeId, incoming_msg.rtr, incoming_msg.data_length_code);
+        #endif
+
         // ignore messages from self
         if (nodeId == THIS_NODE) {
+            #if DEBUG_MODE_INCOMING
+            Serial.println("Ignoring message from self");
+            #endif
             return;
         }
-        #if DEBUG_MODE_INCOMING
-        Serial.printf("Received CAN Msg - ID: 0x%03X, Priority: %d, Type: %d, From Node: 0x%02X\n", id, priority, msgType, nodeId);
-        #endif
 
         // handle based on message type 
         if (msgType == HEARTBEAT_REQUEST && incoming_msg.rtr == 1) { 
-            // only if connected do we call handleHeartbeatRTRMsg(incoming_msg, ) 
-            if (airQualitySensor.update()) {  // // update sensor reading and connection status
-                // feed buffers with latest readings
-                AQReading reading = airQualitySensor.getReading();
-                pm25AqiBuffer.addSample(reading.aqi_pm25_us);
-                pm100AqiBuffer.addSample(reading.aqi_pm100_us);
-                ubaBuffer.addSample(reading.aqi_uba);
-
+            // Check if we have valid sensor data (buffered values available)
+            // Do NOT call update() here - it blocks for milliseconds and prevents CAN servicing
+            if (airQualitySensor.isPMConnected() || airQualitySensor.isENSConnected()) {
+                #if DEBUG_MODE_INCOMING
+                Serial.println("Received HEARTBEAT_REQUEST RTR. Sending response with buffered AQI values.");
+                #endif
                 handleHeartbeatRTRMsg(incoming_msg, 
                     pm25AqiBuffer.getAverage(), 
                     pm100AqiBuffer.getAverage(), 
@@ -71,9 +74,12 @@ void handleIncomingMsg(
 
     } 
 
-    else if (status != ESP_ERR_TIMEOUT) {
+    else if (status == ESP_ERR_TIMEOUT) {
+        // Normal - no message received within timeout period
+    }
+    else {
         #if DEBUG_MODE_INCOMING
-        Serial.printf("Error receiving CAN message: %s\n", esp_err_to_name(status));
+        Serial.printf("Error receiving CAN message: %s (0x%X)\n", esp_err_to_name(status), status);
         #endif
     }
 
