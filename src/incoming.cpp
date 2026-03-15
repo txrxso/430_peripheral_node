@@ -14,6 +14,16 @@ void handleIncomingMsg(
     AirQualitySensor& airQualitySensor
     ) { 
 
+    // Check hardware buffer status before reading
+    #if DEBUG_MODE_INCOMING
+    twai_status_info_t status_info;
+    if (twai_get_status_info(&status_info) == ESP_OK) {
+        if (status_info.msgs_to_rx > 0) {
+            Serial.printf("[RX BUFFER] %lu messages waiting in hardware buffer\n", status_info.msgs_to_rx);
+        }
+    }
+    #endif
+
     twai_message_t incoming_msg;
     esp_err_t status = twai_receive(&incoming_msg, pdMS_TO_TICKS(100));
 
@@ -27,6 +37,10 @@ void handleIncomingMsg(
         #if DEBUG_MODE_INCOMING
         Serial.printf("Received CAN Msg - ID: 0x%03X, Priority: %d, Type: %d, From Node: 0x%02X, RTR: %d, DLC: %d\n", 
                       id, priority, msgType, nodeId, incoming_msg.rtr, incoming_msg.data_length_code);
+        if (incoming_msg.rtr == 1) {
+            Serial.printf(">>> RTR FRAME DETECTED! MsgType raw: 0x%02X, HEARTBEAT_REQUEST: 0x%02X\n", 
+                          msgType, HEARTBEAT_REQUEST);
+        }
         #endif
 
         // ignore messages from self
