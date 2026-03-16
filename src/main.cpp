@@ -15,7 +15,7 @@ Sends HEARTBEAT_RESPONSE.
 #define DEBUG_MODE 1
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 #define ENABLE_ACK 1 
-#define ALERT_INJECTION 1 // set to 1 to randomly inject alerts for testing, set to 0 for normal operation
+#define ALERT_INJECTION 0 // set to 1 to randomly inject alerts for testing, set to 0 for normal operation
 #define INJECTION_INTERVAL_MS 60000 
 
 // --- ALERTING THRESHOLDS --- 
@@ -43,6 +43,10 @@ uint8_t alert_seq_saved = 0;     // saved seq_num for current alert being retrie
 int bufferSize = int(5*60*1000/SAMPLE_INTERVAL_MS); 
 unsigned long lastPoll = 0;
 unsigned long lastSample = 0;
+
+#if ALERT_INJECTION
+unsigned long lastInjection = 0;
+#endif
 // create buffers to hold 3 different AQI values
 DataBuffer pm25AqiBuffer(bufferSize);
 DataBuffer pm100AqiBuffer(bufferSize);
@@ -65,6 +69,19 @@ void handleSampling() {
     #else
     if (airQualitySensor.update()) {
         curr_reading = airQualitySensor.getReading();
+    }
+    #endif
+
+    // Alert injection mode for testing
+    #if ALERT_INJECTION
+    if (millis() - lastInjection >= INJECTION_INTERVAL_MS) {
+      curr_reading.aqi_pm25_us = 150;  // Inject alert-triggering value (threshold is 100)
+      curr_reading.aqi_pm100_us = 50;  // Keep other values normal
+      curr_reading.aqi_uba = 2;
+      lastInjection = millis();
+      #if DEBUG_MODE
+      Serial.println("[ALERT_INJECTION] Injecting alert condition: PM2.5 AQI = 150");
+      #endif
     }
     #endif
 
