@@ -13,7 +13,7 @@
 #include <DFRobot_ENS160.h>
 
 #define SENSOR_DEBUG_MODE 1
-#define ENS160_AHT21_I2C_ADDR 0x52  // may also be 0x52 - need to check
+#define ENS160_AHT21_I2C_ADDR 0x53  // after switching to stranded and rewiring, changed from 0x52 to 0x53, make sure to update if you change wiring again
 //#define PM_RX_PIN 16  // ESP32 RX connected to PM sensor TX
 //#define PM_TX_PIN 17  // ESP32 TX connected to PM sensor RX
 #define PM_RX_PIN 26 // Connects to PMS5003 TX - taken from newest commit
