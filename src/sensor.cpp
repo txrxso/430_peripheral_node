@@ -21,22 +21,11 @@ void AirQualitySensor::begin() {
     Wire.begin(21, 22);
     Wire.setClock(100000);
     delay(500); // Increased delay for I2C stabilization
-
-    #if SENSOR_DEBUG_MODE
-    // Scan I2C bus for debugging
-    Serial.println("Scanning I2C bus...");
-    for (uint8_t addr = 1; addr < 127; addr++) {
-        Wire.beginTransmission(addr);
-        if (Wire.endTransmission() == 0) {
-            Serial.print("I2C device found at 0x");
-            Serial.println(addr, HEX);
-        }
-    }
-    #endif
+    // 0x38, 0x52 addresses
 
     // Initialize UART for PM sensor
     Serial2.begin(9600, SERIAL_8N1, PM_RX_PIN, PM_TX_PIN);
-    delay(3000); // Wait for PM sensor to boot up
+    delay(1000); // Wait for PM sensor to boot up
 
     _pmConnected = _pmSensor.begin_UART(&Serial2);
 
