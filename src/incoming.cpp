@@ -25,9 +25,8 @@ void handleIncomingMsg(
     #endif
 
     twai_message_t incoming_msg;
-    esp_err_t status = twai_receive(&incoming_msg, pdMS_TO_TICKS(100));
-
-    if (status == ESP_OK) {
+    while (twai_receive(&incoming_msg, pdMS_TO_TICKS(50)) == ESP_OK) {
+        // process message
         // parse msg 
         uint32_t id = incoming_msg.identifier;
         CANPriority priority = static_cast<CANPriority>((id >> 8) & 0x07);
@@ -48,6 +47,11 @@ void handleIncomingMsg(
             #if DEBUG_MODE_INCOMING
             Serial.println("Ignoring message from self");
             #endif
+            return;
+        }
+
+        if (nodeId == NODE_NOISE) {
+            // ignore
             return;
         }
 
@@ -85,16 +89,6 @@ void handleIncomingMsg(
             Serial.println("Received ALERT_CLEARED from Gateway. Will suppress alerts.");
             #endif
         }
-
-    } 
-
-    else if (status == ESP_ERR_TIMEOUT) {
-        // Normal - no message received within timeout period
-    }
-    else {
-        #if DEBUG_MODE_INCOMING
-        Serial.printf("Error receiving CAN message: %s (0x%X)\n", esp_err_to_name(status), status);
-        #endif
     }
 
 }
