@@ -15,8 +15,8 @@ Sends HEARTBEAT_RESPONSE.
 #define DEBUG_MODE 1
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 #define ENABLE_ACK 1 
-#define ALERT_INJECTION 0 // set to 1 to randomly inject alerts for testing, set to 0 for normal operation
-#define INJECTION_INTERVAL_MS 60000 
+#define ALERT_INJECTION 1 // set to 1 to randomly inject alerts for testing, set to 0 for normal operation
+#define INJECTION_INTERVAL_MS 30000 // 30 seconds 
 
 // --- ALERTING THRESHOLDS --- 
 // if curr_value >= threshold, trigger alert sending, and keep sending as long as the next sample is also above threshold
@@ -234,5 +234,5 @@ void loop() {
   handleSampling();
   handleIncomingMsg(pm25AqiBuffer, pm100AqiBuffer, ubaAqiBuffer, alertState, suppressUntil, airQualitySensor);
   handleAlertStates();
-  delay(100);
+
 }
