@@ -15,8 +15,8 @@ Sends HEARTBEAT_RESPONSE.
 #define DEBUG_MODE 1
 #define SENSOR_MOCK 0 // set to 1 to use mock sensor readings, set to 0 to use real sensor readings from SoundSensor class
 #define ENABLE_ACK 1 // 0: fire and forget; 1: require ACK for alerts and resend if no ACK
-#define ALERT_INJECTION 0 // 1: inject alert values for testing (uses real sensor + injected alerts)
-#define INJECTION_INTERVAL_MS (30*1000) // inject alert every N milliseconds
+#define ALERT_INJECTION 1 // 1: inject alert values for testing (uses real sensor + injected alerts)
+#define INJECTION_INTERVAL_MS (5*60*1000) // inject alert every N milliseconds
 
 SoundSensor noiseSensor(34); 
 // GPIO 36? Need to check. Or see if can use other pin with internal pull up/down already.
